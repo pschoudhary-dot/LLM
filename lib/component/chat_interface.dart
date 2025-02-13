@@ -67,7 +67,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
         final tavilyResults = await _performWebSearch(userMessage);
         setState(() {
           _messages.add(Message(
-            content: '$aiResponse\n\n**Web Search Results:**\n$tavilyResults',
+            content: '**PocketLLM:**\n$aiResponse\n\n**Web Search Results:**\n$tavilyResults',
             isUser: false,
             timestamp: DateTime.now(),
           ));
@@ -75,7 +75,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
       } else {
         setState(() {
           _messages.add(Message(
-            content: aiResponse,
+            content: '**PocketLLM:**\n$aiResponse',
             isUser: false,
             timestamp: DateTime.now(),
           ));
@@ -147,82 +147,71 @@ class _ChatInterfaceState extends State<ChatInterface> {
   }
 
   Widget _buildModelSelector() {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 5,
-            offset: Offset(0, 2),
+    return Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Theme(
+          data: ThemeData(
+            canvasColor: Colors.grey[200], // Background color of dropdown
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Select Model:',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[700],
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton(
-                value: _selectedModel,
-                isExpanded: true,
-                icon: Icon(Icons.arrow_drop_down, color: Color(0xFF8B5CF6)),
-                items: ModelsRepository.models.map((model) {
-                  return DropdownMenuItem(
-                    value: model.id,
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedModel,
+              isExpanded: true,
+              icon: Icon(Icons.arrow_drop_down, color: Color(0xFF8B5CF6)),
+              items: ModelsRepository.models.map((model) {
+                return DropdownMenuItem<String>(
+                  value: model.id,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: Text(
                       model.id,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.black87,
                         fontSize: 14,
                       ),
                     ),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    setState(() {
-                      _selectedModel = newValue;
-                    });
-                  }
-                },
-              ),
+                  ),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    _selectedModel = newValue;
+                  });
+                }
+              },
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildWebIcon() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _isOnline = !_isOnline;
-          });
-        },
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _isOnline = !_isOnline;
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
         child: Column(
           children: [
             Icon(
               Icons.public,
-              color: _isOnline ? Colors.blue : Colors.grey,
+              color: _isOnline ? Colors.green : Colors.grey,
               size: 30,
             ),
             Text(
               _isOnline ? 'Online' : 'Offline',
               style: TextStyle(
-                color: _isOnline ? Colors.blue : Colors.grey,
+                color: _isOnline ? Colors.green : Colors.grey,
                 fontSize: 12,
               ),
             ),
@@ -237,7 +226,6 @@ class _ChatInterfaceState extends State<ChatInterface> {
     return Scaffold(
       body: Column(
         children: [
-          _buildModelSelector(),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -254,7 +242,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 valueColor: AlwaysStoppedAnimation(Color(0xFF8B5CF6)),
               ),
             ),
-          _buildWebIcon(),
+          // Input Area with Model Selector and Web Icon
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -266,61 +254,76 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 ),
               ],
             ),
-            padding: EdgeInsets.all(16),
-            child: Row(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
               children: [
-                IconButton(
-                  icon: Icon(Icons.attach_file),
-                  onPressed: () {
-                    // Handle attachment functionality
-                  },
+                // Row for Web Icon and Model Selector
+                Row(
+                  children: [
+                    _buildWebIcon(),
+                    SizedBox(width: 8),
+                    _buildModelSelector(),
+                  ],
                 ),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(24),
+                SizedBox(height: 8),
+                // Input Field
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.attach_file, color: Color(0xFF8B5CF6)),
+                      onPressed: () {
+                        // Handle attachment functionality
+                      },
                     ),
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Type a message...',
-                        hintStyle: TextStyle(color: Colors.grey[500]),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                    Expanded(
+                      child: Container(
+                        height: 60, // Increased height for better usability
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: TextField(
+                          controller: _messageController,
+                          maxLines: null, // Allow multiple lines
+                          decoration: InputDecoration(
+                            hintText: 'Type a message...',
+                            hintStyle: TextStyle(color: Colors.grey[500]),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.mic),
-                  onPressed: () {
-                    // Handle voice input functionality
-                  },
-                ),
-                SizedBox(width: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: _isLoading ? Colors.grey : Color(0xFF8B5CF6),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: _isLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(Colors.white),
-                            ),
-                          )
-                        : Icon(Icons.send),
-                    color: Colors.white,
-                    onPressed: _isLoading ? null : _sendMessage,
-                  ),
+                    IconButton(
+                      icon: Icon(Icons.mic, color: Color(0xFF8B5CF6), size: 32), // Increased size
+                      onPressed: () {
+                        // Handle voice input functionality
+                      },
+                    ),
+                    SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _isLoading ? Color(0xFF8B5CF6) : Color(0xFF8B5CF6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: _isLoading
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                                ),
+                              )
+                            : Icon(Icons.send, color: Colors.white),
+                        onPressed: _isLoading ? null : _sendMessage,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
