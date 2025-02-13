@@ -17,3 +17,32 @@ class ModelsRepository {
     AIModel(id: 'Meta-Llama-3.3-70B-Instruct-Turbo', costPerMillionTokens: 0.3),
   ];
 }
+
+class Message {
+  final String content;
+  final bool isUser;
+  final DateTime timestamp;
+
+  Message({
+    required this.content,
+    required this.isUser,
+    required this.timestamp,
+  });
+
+  // Add fromJson and toJson methods for serialization
+  Map<String, dynamic> toJson() {
+    return {
+      'content': content,
+      'isUser': isUser,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
+
+  factory Message.fromJson(Map<String, dynamic> json) {
+    return Message(
+      content: json['content'],
+      isUser: json['isUser'],
+      timestamp: DateTime.parse(json['timestamp']),
+    );
+  }
+}

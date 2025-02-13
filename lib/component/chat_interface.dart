@@ -4,20 +4,8 @@ import 'dart:convert';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:clipboard/clipboard.dart';
 import 'models.dart';
-import 'tavily_service.dart'; // Import the Tavily service
-
-// Message class remains the same
-class Message {
-  final String content;
-  final bool isUser;
-  final DateTime timestamp;
-
-  Message({
-    required this.content,
-    required this.isUser,
-    required this.timestamp,
-  });
-}
+import 'tavily_service.dart';
+import 'chat_history_manager.dart'; // Import the new chat history manager
 
 class ChatInterface extends StatefulWidget {
   @override
@@ -32,42 +20,58 @@ class _ChatInterfaceState extends State<ChatInterface> {
   late String _selectedModel;
   final String apiKey = 'ddc-m4qlvrgpt1W1E4ZXc4bvm5T5Z6CRFLeXRCx9AbRuQOcGpFFrX2';
   final String apiUrl = 'https://api.sree.shop/v1/chat/completions';
-
-  // Tavily integration
   final TavilyService _tavilyService = TavilyService();
-  bool _isOnline = false; // Tracks online/offline state
+  bool _isOnline = false;
+  final ChatHistoryManager _chatHistoryManager = ChatHistoryManager();
+
+  // Suggested messages
+  final List<String> _suggestedMessages = [
+    "Tell me about quantum computing.",
+    "What's the weather like today?",
+    "Explain machine learning in simple terms.",
+  ];
 
   @override
   void initState() {
     super.initState();
     _selectedModel = ModelsRepository.models.first.id;
+    _loadChatHistory();
+  }
+
+  Future<void> _loadChatHistory() async {
+    final savedMessages = await _chatHistoryManager.loadChatHistory();
+    setState(() {
+      _messages.addAll(savedMessages);
+    });
+    _scrollToBottom();
   }
 
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
     final userMessage = _messageController.text;
+    final newMessage = Message(
+      content: userMessage,
+      isUser: true,
+      timestamp: DateTime.now(),
+    );
+
     setState(() {
-      _messages.add(Message(
-        content: userMessage,
-        isUser: true,
-        timestamp: DateTime.now(),
-      ));
+      _messages.add(newMessage);
       _isLoading = true;
     });
 
     _messageController.clear();
+    _saveChatHistory();
 
     try {
-      // Get AI response
       final aiResponse = await _getAIResponse(userMessage);
 
-      // If online, perform a web search using Tavily
       if (_isOnline) {
         final tavilyResults = await _performWebSearch(userMessage);
         setState(() {
           _messages.add(Message(
-            content: '**PocketLLM:**\n$aiResponse\n\n**Web Search Results:**\n$tavilyResults',
+            content: '$aiResponse\n\n**Web Search Results:**\n$tavilyResults',
             isUser: false,
             timestamp: DateTime.now(),
           ));
@@ -75,7 +79,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
       } else {
         setState(() {
           _messages.add(Message(
-            content: '**PocketLLM:**\n$aiResponse',
+            content: aiResponse,
             isUser: false,
             timestamp: DateTime.now(),
           ));
@@ -93,8 +97,13 @@ class _ChatInterfaceState extends State<ChatInterface> {
       setState(() {
         _isLoading = false;
       });
+      _saveChatHistory();
       _scrollToBottom();
     }
+  }
+
+  Future<void> _saveChatHistory() async {
+    await _chatHistoryManager.saveChatHistory(_messages);
   }
 
   Future<String> _getAIResponse(String userMessage) async {
@@ -149,20 +158,20 @@ class _ChatInterfaceState extends State<ChatInterface> {
   Widget _buildModelSelector() {
     return Expanded(
       child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Theme(
           data: ThemeData(
-            canvasColor: Colors.grey[200], // Background color of dropdown
+            canvasColor: Colors.white,
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _selectedModel,
-              isExpanded: true,
               icon: Icon(Icons.arrow_drop_down, color: Color(0xFF8B5CF6)),
+              isExpanded: true,
               items: ModelsRepository.models.map((model) {
                 return DropdownMenuItem<String>(
                   value: model.id,
@@ -170,6 +179,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: Text(
                       model.id,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.black87,
                         fontSize: 14,
@@ -221,18 +231,57 @@ class _ChatInterfaceState extends State<ChatInterface> {
     );
   }
 
+  Widget _buildSuggestedMessages() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "Start a conversation with one of these:",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _suggestedMessages.map((message) {
+              return ElevatedButton(
+                onPressed: () {
+                  _messageController.text = message;
+                  _sendMessage();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF8B5CF6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  message,
+                  style: TextStyle(color: Colors.white),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: EdgeInsets.only(top: 16, bottom: 16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) => _buildMessageBubble(_messages[index]),
-            ),
+            child: _messages.isEmpty
+                ? _buildSuggestedMessages()
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: EdgeInsets.only(top: 16, bottom: 16),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) => _buildMessageBubble(_messages[index]),
+                  ),
           ),
           if (_isLoading)
             Padding(
@@ -242,7 +291,6 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 valueColor: AlwaysStoppedAnimation(Color(0xFF8B5CF6)),
               ),
             ),
-          // Input Area with Model Selector and Web Icon
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -257,7 +305,6 @@ class _ChatInterfaceState extends State<ChatInterface> {
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               children: [
-                // Row for Web Icon and Model Selector
                 Row(
                   children: [
                     _buildWebIcon(),
@@ -266,7 +313,6 @@ class _ChatInterfaceState extends State<ChatInterface> {
                   ],
                 ),
                 SizedBox(height: 8),
-                // Input Field
                 Row(
                   children: [
                     IconButton(
@@ -277,28 +323,25 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     ),
                     Expanded(
                       child: Container(
-                        height: 60, // Increased height for better usability
+                        height: 60,
                         decoration: BoxDecoration(
                           color: Colors.grey[100],
                           borderRadius: BorderRadius.circular(24),
                         ),
                         child: TextField(
                           controller: _messageController,
-                          maxLines: null, // Allow multiple lines
+                          maxLines: null,
                           decoration: InputDecoration(
                             hintText: 'Type a message...',
                             hintStyle: TextStyle(color: Colors.grey[500]),
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.mic, color: Color(0xFF8B5CF6), size: 32), // Increased size
+                      icon: Icon(Icons.mic, color: Color(0xFF8B5CF6), size: 32),
                       onPressed: () {
                         // Handle voice input functionality
                       },
@@ -351,9 +394,20 @@ class _ChatInterfaceState extends State<ChatInterface> {
             ),
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
+                if (!message.isUser)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: Text(
+                      'PocketLLM',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
                 Container(
                   constraints: BoxConstraints(
                     maxWidth: MediaQuery.of(context).size.width * 0.75,
