@@ -24,18 +24,55 @@ class _ChatInterfaceState extends State<ChatInterface> {
   bool _isOnline = false;
   final ChatHistoryManager _chatHistoryManager = ChatHistoryManager();
 
-  // Suggested messages
-  final List<String> _suggestedMessages = [
-    "Tell me about quantum computing.",
-    "What's the weather like today?",
-    "Explain machine learning in simple terms.",
-  ];
+  // Suggested messages (dynamic)
+  List<String> _suggestedMessages = [];
 
   @override
   void initState() {
     super.initState();
     _selectedModel = ModelsRepository.models.first.id;
     _loadChatHistory();
+    _generateSuggestedQuestions(); // Generate dynamic questions on startup
+  }
+
+  Future<void> _generateSuggestedQuestions() async {
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'model': _selectedModel,
+          'messages': [
+            {
+              'role': 'user',
+              'content':
+                  'Generate 3 interesting and engaging questions with emojis for a chatbot conversation.',
+            }
+          ],
+          'temperature': 0.8,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final aiResponse = data['choices'][0]['message']['content'];
+        setState(() {
+          _suggestedMessages = aiResponse.split('\n').map((q) => q.trim()).toList();
+        });
+      } else {
+        throw Exception('Failed to generate suggested questions');
+      }
+    } catch (e) {
+      setState(() {
+        _suggestedMessages = [
+          "🤔 What's the meaning of life?",
+          "🌍 How can we protect the environment?",
+          "🤖 What are the latest AI trends?"
+        ];
+      });
+    }
   }
 
   Future<void> _loadChatHistory() async {
@@ -66,12 +103,13 @@ class _ChatInterfaceState extends State<ChatInterface> {
 
     try {
       final aiResponse = await _getAIResponse(userMessage);
+      String cleanedResponse = _cleanUpResponse(aiResponse);
 
       if (_isOnline) {
         final tavilyResults = await _performWebSearch(userMessage);
         setState(() {
           _messages.add(Message(
-            content: '$aiResponse\n\n**Web Search Results:**\n$tavilyResults',
+            content: '$cleanedResponse\n\n**Web Search Results:**\n$tavilyResults',
             isUser: false,
             timestamp: DateTime.now(),
           ));
@@ -79,7 +117,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
       } else {
         setState(() {
           _messages.add(Message(
-            content: aiResponse,
+            content: cleanedResponse,
             isUser: false,
             timestamp: DateTime.now(),
           ));
@@ -100,6 +138,10 @@ class _ChatInterfaceState extends State<ChatInterface> {
       _saveChatHistory();
       _scrollToBottom();
     }
+  }
+
+  String _cleanUpResponse(String response) {
+    return response.replaceAll(RegExp(r"In\s*\$\~{3}\$.*?\$\~{3}\$"), '').trim();
   }
 
   Future<void> _saveChatHistory() async {
@@ -134,7 +176,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
     try {
       final result = await _tavilyService.search(query);
       final answer = result['answer'] ?? 'No answer found.';
-      final results = (result['results'] as List<dynamic>)
+      final results = (result['results'] as List)
           .map((item) => '- ${item['title']} (${item['url']})')
           .join('\n');
       return '$answer\n\n$results';
@@ -148,7 +190,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
@@ -158,7 +200,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
   Widget _buildModelSelector() {
     return Expanded(
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey[300]!),
           borderRadius: BorderRadius.circular(8),
@@ -170,7 +212,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _selectedModel,
-              icon: Icon(Icons.arrow_drop_down, color: Color(0xFF8B5CF6)),
+              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF8B5CF6)),
               isExpanded: true,
               items: ModelsRepository.models.map((model) {
                 return DropdownMenuItem<String>(
@@ -180,7 +222,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     child: Text(
                       model.id,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.black87,
                         fontSize: 14,
                       ),
@@ -236,11 +278,11 @@ class _ChatInterfaceState extends State<ChatInterface> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
+          const Text(
             "Start a conversation with one of these:",
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -251,14 +293,19 @@ class _ChatInterfaceState extends State<ChatInterface> {
                   _sendMessage();
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF8B5CF6),
+                  backgroundColor: const Color(0xFF8B5CF6),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(24),
                   ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
                 child: Text(
                   message,
-                  style: TextStyle(color: Colors.white),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               );
             }).toList(),
@@ -278,17 +325,17 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 ? _buildSuggestedMessages()
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: EdgeInsets.only(top: 16, bottom: 16),
+                    padding: const EdgeInsets.only(top: 16, bottom: 16),
                     itemCount: _messages.length,
                     itemBuilder: (context, index) => _buildMessageBubble(_messages[index]),
                   ),
           ),
           if (_isLoading)
             Padding(
-              padding: EdgeInsets.all(8.0),
+              padding: const EdgeInsets.all(8.0),
               child: LinearProgressIndicator(
                 backgroundColor: Colors.grey[300],
-                valueColor: AlwaysStoppedAnimation(Color(0xFF8B5CF6)),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFF8B5CF6)),
               ),
             ),
           Container(
@@ -298,25 +345,25 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
                   blurRadius: 10,
-                  offset: Offset(0, -5),
+                  offset: const Offset(0, -5),
                 ),
               ],
             ),
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               children: [
                 Row(
                   children: [
                     _buildWebIcon(),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     _buildModelSelector(),
                   ],
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     IconButton(
-                      icon: Icon(Icons.attach_file, color: Color(0xFF8B5CF6)),
+                      icon: const Icon(Icons.attach_file, color: Color(0xFF8B5CF6)),
                       onPressed: () {
                         // Handle attachment functionality
                       },
@@ -335,26 +382,29 @@ class _ChatInterfaceState extends State<ChatInterface> {
                             hintText: 'Type a message...',
                             hintStyle: TextStyle(color: Colors.grey[500]),
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.mic, color: Color(0xFF8B5CF6), size: 32),
+                      icon: const Icon(Icons.mic, color: Color(0xFF8B5CF6), size: 32),
                       onPressed: () {
                         // Handle voice input functionality
                       },
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Container(
                       decoration: BoxDecoration(
-                        color: _isLoading ? Color(0xFF8B5CF6) : Color(0xFF8B5CF6),
+                        color: _isLoading ? const Color(0xFF8B5CF6) : const Color(0xFF8B5CF6),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
                         icon: _isLoading
-                            ? SizedBox(
+                            ? const SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
@@ -362,7 +412,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                                   valueColor: AlwaysStoppedAnimation(Colors.white),
                                 ),
                               )
-                            : Icon(Icons.send, color: Colors.white),
+                            : const Icon(Icons.send, color: Colors.white),
                         onPressed: _isLoading ? null : _sendMessage,
                       ),
                     ),
@@ -378,14 +428,14 @@ class _ChatInterfaceState extends State<ChatInterface> {
 
   Widget _buildMessageBubble(Message message) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!message.isUser)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
+            const Padding(
+              padding: EdgeInsets.only(right: 8.0),
               child: CircleAvatar(
                 backgroundColor: Color(0xFF8B5CF6),
                 radius: 16,
@@ -394,11 +444,12 @@ class _ChatInterfaceState extends State<ChatInterface> {
             ),
           Flexible(
             child: Column(
-              crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (!message.isUser)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4.0),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 4.0),
                     child: Text(
                       'PocketLLM',
                       style: TextStyle(
@@ -413,10 +464,10 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     maxWidth: MediaQuery.of(context).size.width * 0.75,
                   ),
                   decoration: BoxDecoration(
-                    color: message.isUser ? Color(0xFF8B5CF6) : Color(0xFFF3F4F6),
+                    color: message.isUser ? const Color(0xFF8B5CF6) : const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: MarkdownBody(
                     data: message.content,
                     styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
@@ -433,7 +484,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     ),
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -445,7 +496,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                       ),
                     ),
                     if (!message.isUser) ...[
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       _buildCopyButton(message.content),
                     ],
                   ],
@@ -454,8 +505,8 @@ class _ChatInterfaceState extends State<ChatInterface> {
             ),
           ),
           if (message.isUser)
-            Padding(
-              padding: const EdgeInsets.only(left: 8.0),
+            const Padding(
+              padding: EdgeInsets.only(left: 8.0),
               child: CircleAvatar(
                 backgroundColor: Color(0xFF4CAF50),
                 radius: 16,
@@ -477,13 +528,13 @@ class _ChatInterfaceState extends State<ChatInterface> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Row(
-                  children: [
+                  children: const [
                     Icon(Icons.check_circle, color: Colors.white),
                     SizedBox(width: 8),
                     Text('Copied to clipboard!'),
                   ],
                 ),
-                backgroundColor: Color(0xFF8B5CF6),
+                backgroundColor: const Color(0xFF8B5CF6),
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -493,14 +544,14 @@ class _ChatInterfaceState extends State<ChatInterface> {
           });
         },
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            border: Border.all(color: Color(0xFF8B5CF6)),
+            border: Border.all(color: const Color(0xFF8B5CF6)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: [
+            children: const [
               Icon(
                 Icons.copy,
                 size: 16,
