@@ -85,26 +85,21 @@ class _ChatInterfaceState extends State<ChatInterface> {
 
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
-
     final userMessage = _messageController.text;
     final newMessage = Message(
       content: userMessage,
       isUser: true,
       timestamp: DateTime.now(),
     );
-
     setState(() {
       _messages.add(newMessage);
       _isLoading = true;
     });
-
     _messageController.clear();
     _saveChatHistory();
-
     try {
       final aiResponse = await _getAIResponse(userMessage);
       String cleanedResponse = _cleanUpResponse(aiResponse);
-
       if (_isOnline) {
         final tavilyResults = await _performWebSearch(userMessage);
         setState(() {
@@ -163,7 +158,6 @@ class _ChatInterfaceState extends State<ChatInterface> {
         'temperature': 0.7,
       }),
     );
-
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return data['choices'][0]['message']['content'];
@@ -206,9 +200,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Theme(
-          data: ThemeData(
-            canvasColor: Colors.white,
-          ),
+          data: ThemeData(canvasColor: Colors.white),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _selectedModel,
@@ -222,10 +214,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     child: Text(
                       model.id,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 14,
-                      ),
+                      style: const TextStyle(color: Colors.black87, fontSize: 14),
                     ),
                   ),
                 );

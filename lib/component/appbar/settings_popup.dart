@@ -13,9 +13,15 @@ class _SettingsPopupState extends State<SettingsPopup> {
 
   // Model providers with associated icons
   final Map<String, IconData> _modelProviders = {
-    'Free': Icons.free_breakfast,
-    'Ollama': Icons.cloud,
-    'LLM Studio': Icons.build,
+    'Free': Icons.free_breakfast_rounded,
+    'Ollama': Icons.cloud_upload_rounded,
+    'LLM Studio': Icons.build_circle_rounded,
+  };
+
+  // Default base URLs for providers
+  final Map<String, String> _defaultBaseUrls = {
+    'Ollama': 'http://localhost:11434',
+    'LLM Studio': '',
   };
 
   // Load saved data when the widget initializes
@@ -31,7 +37,10 @@ class _SettingsPopupState extends State<SettingsPopup> {
     setState(() {
       _selectedProvider = prefs.getString('selectedProvider') ?? 'Free';
       _modelNameController.text = prefs.getString('modelName') ?? '';
-      _baseUrlController.text = prefs.getString('baseUrl') ?? '';
+      _baseUrlController.text = prefs.getString('baseUrl') ??
+          (_selectedProvider != null && _defaultBaseUrls[_selectedProvider] != null
+              ? _defaultBaseUrls[_selectedProvider]!
+              : '');
     });
   }
 
@@ -48,7 +57,7 @@ class _SettingsPopupState extends State<SettingsPopup> {
     return AlertDialog(
       title: Text(
         'Settings',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -60,7 +69,7 @@ class _SettingsPopupState extends State<SettingsPopup> {
               decoration: InputDecoration(
                 labelText: 'Model Provider',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.anchor_outlined), // Add a prefix icon
+                prefixIcon: Icon(Icons.anchor_outlined, color: Colors.blue),
               ),
               value: _selectedProvider,
               items: _modelProviders.entries.map((entry) {
@@ -68,9 +77,9 @@ class _SettingsPopupState extends State<SettingsPopup> {
                   value: entry.key,
                   child: Row(
                     children: [
-                      Icon(entry.value, color: Colors.blue), // Icon for each provider
+                      Icon(entry.value, color: Colors.blue),
                       SizedBox(width: 8),
-                      Text(entry.key), // Provider name
+                      Text(entry.key),
                     ],
                   ),
                 );
@@ -78,32 +87,52 @@ class _SettingsPopupState extends State<SettingsPopup> {
               onChanged: (String? newValue) {
                 setState(() {
                   _selectedProvider = newValue;
+                  // Set default base URL if available
+                  if (_defaultBaseUrls.containsKey(newValue)) {
+                    _baseUrlController.text = _defaultBaseUrls[newValue]!;
+                  } else {
+                    _baseUrlController.clear();
+                  }
                 });
               },
             ),
             SizedBox(height: 16),
 
-            // Model Name Field
-            TextFormField(
-              controller: _modelNameController,
-              decoration: InputDecoration(
-                labelText: 'Model Name',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.model_training), // Add a prefix icon
-              ),
-            ),
-            SizedBox(height: 16),
-
-            // Base URL Field (Visible only for Ollama and LLM Studio)
+            // Conditional Fields for Ollama and LLM Studio
             if (_selectedProvider != 'Free')
               Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    'Configure ${_selectedProvider} Settings',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  SizedBox(height: 8),
+
+                  // Model Name Field
+                  TextFormField(
+                    controller: _modelNameController,
+                    decoration: InputDecoration(
+                      labelText: 'Model Name',
+                      hintText: 'Enter the name of the model',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.model_training_rounded, color: Colors.blue),
+                    ),
+                  ),
+                  SizedBox(height: 16),
+
+                  // Base URL Field
                   TextFormField(
                     controller: _baseUrlController,
                     decoration: InputDecoration(
                       labelText: 'Base URL',
+                      hintText: 'Enter the base URL for the API',
                       border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.link), // Add a prefix icon
+                      prefixIcon: Icon(Icons.link_rounded, color: Colors.blue),
                     ),
                   ),
                   SizedBox(height: 16),
@@ -117,18 +146,19 @@ class _SettingsPopupState extends State<SettingsPopup> {
           onPressed: () {
             Navigator.of(context).pop(); // Close the dialog
           },
-          child: Text('Cancel'),
+          child: Text(
+            'Cancel',
+            style: TextStyle(color: Colors.grey),
+          ),
         ),
         ElevatedButton(
           onPressed: () async {
             // Save the data
             await _saveData();
-
             // Print the saved values for debugging
             print('Selected Provider: $_selectedProvider');
             print('Model Name: ${_modelNameController.text}');
             print('Base URL: ${_baseUrlController.text}');
-
             Navigator.of(context).pop(); // Close the dialog
           },
           child: Text('Save'),
