@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'settings_popup.dart'; // Import the settings popup file
+import 'appbar/settings_popup.dart'; // Import the settings popup file
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String appName;
