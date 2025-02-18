@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'appbar/settings_popup.dart'; // Import the settings popup file
+import 'appbar/settings_popup.dart';
+import '../pages/config_page.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String appName;
@@ -72,6 +73,16 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ],
                   ),
                 ),
+                PopupMenuItem<int>(
+                  value: 4,
+                  child: Row(
+                    children: [
+                      Icon(Icons.computer, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text('Configs', style: TextStyle(color: Colors.white)),
+                    ],
+                  ),
+                ),
               ],
               onSelected: (item) => _selectedMenuItem(context, item),
             ),
@@ -108,6 +119,15 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       case 3:
         print('About selected');
         break;
+      // In the _selectedMenuItem method, replace the case 4 block:
+            case 4:
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ConfigPage(appName: appName),
+                ),
+              );
+              break;
     }
   }
 
