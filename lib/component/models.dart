@@ -1,20 +1,67 @@
 class AIModel {
   final String id;
-  final double costPerMillionTokens;
+  final String description;  // Add this line
+  final String provider;
 
-  AIModel({required this.id, required this.costPerMillionTokens});
+  AIModel({
+    required this.id,
+    required this.provider,
+    this.description = 'A powerful language model',  // Add default description
+  });
 }
 
 class ModelsRepository {
   static final List<AIModel> models = [
-    AIModel(id: 'claude-3-5-sonnet-20240620', costPerMillionTokens: 15),
-    AIModel(id: 'claude-3-5-sonnet', costPerMillionTokens: 15),
-    AIModel(id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B', costPerMillionTokens: 2),
-    AIModel(id: 'deepseek-r1', costPerMillionTokens: 2.19),
-    AIModel(id: 'deepseek-v3', costPerMillionTokens: 1.28),
-    AIModel(id: 'gpt-4o', costPerMillionTokens: 5),
-    AIModel(id: 'gpt-4o-2024-05-13', costPerMillionTokens: 5),
-    AIModel(id: 'Meta-Llama-3.3-70B-Instruct-Turbo', costPerMillionTokens: 0.3),
+    AIModel(
+      id: 'gpt-3.5-turbo',
+      provider: 'OpenAI',
+      description: 'Fast and efficient language model optimized for chat',
+    ),
+    AIModel(
+      id: 'gpt-4',
+      provider: 'OpenAI',
+      description: 'Advanced language model with improved reasoning capabilities',
+    ),
+    AIModel(
+      id: 'claude-3-5-sonnet-20240620',
+      provider: 'Anthropic',
+      description: 'Anthropic\'s Claude 3.5 Sonnet model (June 2024 version)',
+    ),
+    AIModel(
+      id: 'claude-3-5-sonnet',
+      provider: 'Anthropic',
+      description: 'Claude 3.5 Sonnet model',
+    ),
+    AIModel(
+      id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B',
+      provider: 'DeepSeek',
+      description: 'DeepSeek R1 Distill Qwen 32B model',
+    ),
+    AIModel(
+      id: 'deepseek-r1',
+      provider: 'DeepSeek',
+      description: 'DeepSeek R1 model',
+    ),
+    AIModel(
+      id: 'deepseek-v3',
+      provider: 'DeepSeek',
+      description: 'DeepSeek V3 model',
+    ),
+    AIModel(
+      id: 'gpt-4o',
+      provider: 'OpenAI',
+      description: 'GPT-4 Optimized model',
+    ),
+    AIModel(
+      id: 'gpt-4o-2024-05-13',
+      provider: 'OpenAI',
+      description: 'GPT-4 Optimized (May 2024 version)',
+    ),
+    AIModel(
+      id: 'Meta-Llama-3.3-70B-Instruct-Turbo',
+      provider: 'Meta',
+      description: 'Llama 3.3 70B Instruct Turbo model',
+    ),
   ];
 }
 

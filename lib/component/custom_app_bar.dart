@@ -2,6 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'appbar/settings_popup.dart';
 import '../pages/config_page.dart';
+import '../pages/library_page.dart';
+import '../pages/settings_page.dart';
+import '../pages/settings_page.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String appName;
@@ -37,9 +40,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   value: 0,
                   child: Row(
                     children: [
-                      Icon(Icons.chat, color: Colors.white),
+                      Icon(Icons.library_books, color: Colors.white),
                       SizedBox(width: 8),
-                      Text('New Chat', style: TextStyle(color: Colors.white)),
+                      Text('Library', style: TextStyle(color: Colors.white)),
                     ],
                   ),
                 ),
@@ -88,13 +91,20 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             actions: [
               IconButton(
+                icon: Icon(Icons.create_outlined),
+                onPressed: () {
+                  // Handle new chat
+                  print('New Chat pressed');
+                },
+              ),
+              IconButton(
                 icon: Icon(Icons.settings),
                 onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return SettingsPopup();
-                    },
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsPage(),
+                    ),
                   );
                 },
               ),
@@ -108,7 +118,12 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   void _selectedMenuItem(BuildContext context, int item) {
     switch (item) {
       case 0:
-        print('New Chat selected');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => LibraryPage(),
+          ),
+        );
         break;
       case 1:
         print('Chat History selected');

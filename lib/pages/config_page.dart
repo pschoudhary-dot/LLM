@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:system_info2/system_info2.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:llm/services/termux_service.dart';  // Add this line
+import 'package:llm/services/termux_service.dart';
 
 class ConfigPage extends StatefulWidget {
   final String appName;
