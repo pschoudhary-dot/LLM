@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'custom_app_bar.dart';
 import 'chat_interface.dart';
+import 'sidebar.dart';  // Add this import
 
 class HomeScreen extends StatelessWidget {
   void _openSettings() {
@@ -15,6 +16,7 @@ class HomeScreen extends StatelessWidget {
         appName: 'PocketLLM',
         onSettingsPressed: _openSettings,
       ),
+      drawer: Sidebar(),  // Add this line to connect the Sidebar
       body: ChatInterface(),
     );
   }

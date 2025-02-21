@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/auth_service.dart';
 import 'component/splash_screen.dart';
 import 'component/home_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize AuthService
+  await AuthService().initialize();
+  
   runApp(MyApp());
 }
 

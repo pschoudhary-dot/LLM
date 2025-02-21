@@ -1,9 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'appbar/settings_popup.dart';
 import '../pages/config_page.dart';
 import '../pages/library_page.dart';
-import '../pages/settings_page.dart';
 import '../pages/settings_page.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -32,62 +30,11 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 fontSize: 20,
               ),
             ),
-            leading: PopupMenuButton<int>(
+            leading: IconButton(
               icon: Icon(Icons.menu),
-              color: const Color.fromARGB(255, 56, 56, 56),
-              itemBuilder: (context) => [
-                PopupMenuItem<int>(
-                  value: 0,
-                  child: Row(
-                    children: [
-                      Icon(Icons.library_books, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text('Library', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                ),
-                PopupMenuItem<int>(
-                  value: 1,
-                  child: Row(
-                    children: [
-                      Icon(Icons.history, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text('Chat History', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                ),
-                PopupMenuItem<int>(
-                  value: 2,
-                  child: Row(
-                    children: [
-                      Icon(Icons.description, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text('Docs', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                ),
-                PopupMenuItem<int>(
-                  value: 3,
-                  child: Row(
-                    children: [
-                      Icon(Icons.info, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text('About', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                ),
-                PopupMenuItem<int>(
-                  value: 4,
-                  child: Row(
-                    children: [
-                      Icon(Icons.computer, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text('Configs', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                ),
-              ],
-              onSelected: (item) => _selectedMenuItem(context, item),
+              onPressed: () {
+                Scaffold.of(context).openDrawer();
+              },
             ),
             actions: [
               IconButton(

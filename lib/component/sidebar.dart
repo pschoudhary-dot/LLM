@@ -1,84 +1,81 @@
 import 'package:flutter/material.dart';
+import '../pages/library_page.dart';
+import '../pages/config_page.dart';
 
 class Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
       child: Container(
-        color: Color.fromARGB(157, 155, 128, 255), // Custom color
+        color: Colors.white,
         child: ListView(
           padding: EdgeInsets.zero,
           children: <Widget>[
-            SizedBox(height: 20), // Add some space at the top
-            ListTile(
-              leading: Icon(Icons.chat, color: Colors.white),
-              title: Text(
-                'New Chat',
-                style: TextStyle(color: Colors.white, fontSize: 18),
-              ),
-              onTap: () {
-                // Handle New Chat tap
-                Navigator.pop(context);
-              },
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
-              ),
-            ),
-            ExpansionTile(
-              leading: Icon(Icons.history, color: Colors.white),
-              title: Text(
-                'Chat History',
-                style: TextStyle(color: Colors.white, fontSize: 18),
-              ),
-              children: <Widget>[
-                ListTile(
-                  title: Text('Chat 1'),
-                  onTap: () {
-                    // Handle Chat 1 tap
-                    Navigator.pop(context);
-                  },
-                ),
-                ListTile(
-                  title: Text('Chat 2'),
-                  onTap: () {
-                    // Handle Chat 2 tap
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
-              ),
-              collapsedIconColor: Colors.white,
-              iconColor: Colors.white,
-            ),
-            ListTile(
-              leading: Icon(Icons.description, color: Colors.white),
-              title: Text(
-                'Docs',
-                style: TextStyle(color: Colors.white, fontSize: 18),
-              ),
-              onTap: () {
-                // Handle Docs tap
-                Navigator.pop(context);
-              },
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
+            Container(
+              padding: EdgeInsets.only(top: 50, bottom: 20),
+              child: Row(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(left: 16),
+                    child: Text(
+                      'PocketLLM',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6B4EFF),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             ListTile(
-              leading: Icon(Icons.info, color: Colors.white),
-              title: Text(
-                'About',
-                style: TextStyle(color: Colors.white, fontSize: 18),
-              ),
+              leading: Icon(Icons.collections_bookmark),  // Changed from library_books
+              title: Text('Library'),
               onTap: () {
-                // Handle About tap
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LibraryPage(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.chat_bubble_outline),  // Changed from history
+              title: Text('Chat History'),
+              onTap: () {
+                print('Chat History selected');
                 Navigator.pop(context);
               },
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
-              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.help_outline),  // Changed from description
+              title: Text('Docs'),
+              onTap: () {
+                print('Docs selected');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.info_outline),  // Changed from info
+              title: Text('About'),
+              onTap: () {
+                print('About selected');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.computer),  // Changed from settings to system_info
+              title: Text('Config'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ConfigPage(appName: 'PocketLLM'),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -86,3 +83,4 @@ class Sidebar extends StatelessWidget {
     );
   }
 }
+

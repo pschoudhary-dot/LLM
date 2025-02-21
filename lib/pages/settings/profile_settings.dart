@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:llm/pages/auth/user_survey_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/auth_page.dart';
+import '../../services/auth_service.dart';
 import 'dart:io';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
   const ProfileSettingsPage({Key? key}) : super(key: key);
@@ -19,7 +21,12 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   String? _username;
   String? _email;
   DateTime? _signupDate;
+  String? _profession;
+  String? _fullName;
+  DateTime? _dateOfBirth;
+  String? _heardFrom;
   final ImagePicker _picker = ImagePicker();
+  final _authService = AuthService();
 
   @override
   void initState() {
@@ -28,27 +35,91 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   }
 
   Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-      _profileImage = prefs.getString('profileImage');
-      _username = prefs.getString('username');
-      _email = prefs.getString('email');
-      final signupTimestamp = prefs.getInt('signupDate');
-      _signupDate = signupTimestamp != null 
-          ? DateTime.fromMillisecondsSinceEpoch(signupTimestamp) 
-          : null;
-    });
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      final userId = session.user.id;
+      try {
+        final userData = await Supabase.instance.client
+            .from('user_profiles')
+            .select()
+            .eq('user_id', userId)
+            .single();
+
+        setState(() {
+          _isLoggedIn = true;
+          _email = session.user.email;
+          _username = userData['username'];
+          _profileImage = userData['profile_image'];
+          _profession = userData['profession'];
+          _signupDate = DateTime.parse(userData['created_at']);
+          // Add other survey data
+          _fullName = userData['full_name'];
+          _dateOfBirth = userData['date_of_birth'] != null 
+              ? DateTime.parse(userData['date_of_birth']) 
+              : null;
+          _heardFrom = userData['heard_from'];
+        });
+      } catch (e) {
+        print('Error loading user data: $e');
+      }
+    } else {
+      setState(() {
+        _isLoggedIn = false;
+      });
+    }
   }
 
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
+      try {
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          final bytes = await image.readAsBytes();
+          final fileName = 'profile_$userId.jpg';
+          
+          // Upload to Supabase Storage
+          await Supabase.instance.client.storage
+              .from('profile_images')
+              .uploadBinary(fileName, bytes);
+
+          final imageUrl = Supabase.instance.client.storage
+              .from('profile_images')
+              .getPublicUrl(fileName);
+
+          // Update profile in database
+          await Supabase.instance.client
+              .from('user_profiles')
+              .update({'profile_image': imageUrl})
+              .eq('user_id', userId);
+
+          setState(() {
+            _profileImage = imageUrl;
+          });
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading image: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await _authService.signOut();
       setState(() {
-        _profileImage = image.path;
+        _isLoggedIn = false;
+        _email = null;
+        _username = null;
+        _profileImage = null;
+        _profession = null;
+        _signupDate = null;
       });
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('profileImage', image.path);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error signing out: $e')),
+      );
     }
   }
 
@@ -208,17 +279,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            // SvgPicture.asset(
-            //   'assets/SizeSmall.svg',
-            //   height: 24,
-            //   width: 24,
-            // ),
-            const SizedBox(width: 8),
-            const Text('Profile'),
-          ],
-        ),
+        title: const Text('Profile'),
         elevation: 0,
         backgroundColor: Colors.transparent,
         flexibleSpace: ClipRect(
@@ -234,14 +295,51 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           ? _buildLoggedInView() 
           : AuthPage(
               onLoginSuccess: (email) async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool('isLoggedIn', true);
-                await prefs.setString('username', email.split('@')[0]);
-                await prefs.setString('email', email);
-                await prefs.setInt('signupDate', DateTime.now().millisecondsSinceEpoch);
-                setState(() {
-                  _isLoggedIn = true;
-                });
+                // Check if user profile exists
+                final userId = Supabase.instance.client.auth.currentUser?.id;
+                if (userId != null) {
+                  try {
+                    final userProfile = await Supabase.instance.client
+                        .from('user_profiles')
+                        .select()
+                        .eq('user_id', userId)
+                        .single();
+                    
+                    if (userProfile == null) {
+                      // Show survey if profile doesn't exist
+                      if (!mounted) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => UserSurveyPage(
+                            userId: userId,
+                            onComplete: () {
+                              _loadUserData();
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ),
+                      );
+                    } else {
+                      await _loadUserData();
+                    }
+                  } catch (e) {
+                    // If no profile exists, show survey
+                    if (!mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => UserSurveyPage(
+                          userId: userId,
+                          onComplete: () {
+                            _loadUserData();
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ),
+                    );
+                  }
+                }
               },
             ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:llm/services/auth_service.dart';
+import '../../widgets/clear_text_field.dart';
 import 'dart:ui';
 
 class AuthPage extends StatefulWidget {
@@ -16,12 +17,39 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
   bool _isValidEmail = false;
-
+  bool _showPasswordField = false;
+  bool _showSignupFields = false;
+  bool _isLoading = false;
   bool _validateEmail(String email) {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
-
+  Future<void> _handleEmailCheck() async {
+    if (!mounted) return;
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+      
+      final exists = await AuthService().checkEmailExists(_emailController.text);
+      if (!mounted) return;
+      setState(() {
+        _showPasswordField = exists;
+        _showSignupFields = !exists;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error checking email: ${e.toString()}')),
+      );
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -49,28 +77,10 @@ class _AuthPageState extends State<AuthPage> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 40),
-            TextField(
+            const SizedBox(height: 40),
+            ClearTextField(
               controller: _emailController,
-              decoration: InputDecoration(
-                hintText: 'Email',
-                filled: true,
-                fillColor: Colors.grey[200],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                suffixIcon: _emailController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _emailController.clear();
-                          setState(() {
-                            _isValidEmail = false;
-                          });
-                        },
-                      )
-                    : null,
-              ),
+              hintText: 'Email',
               onChanged: (value) {
                 setState(() {
                   _isValidEmail = _validateEmail(value);
@@ -79,10 +89,8 @@ class _AuthPageState extends State<AuthPage> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _isValidEmail
-                  ? () {
-                      widget.onLoginSuccess(_emailController.text);
-                    }
+              onPressed: _isValidEmail && !_isLoading
+                  ? _handleEmailCheck
                   : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.black,
@@ -91,14 +99,124 @@ class _AuthPageState extends State<AuthPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text(
-                'Continue',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white),
+                    )
+                  : const Text(
+                      'Continue',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+            if (_showPasswordField) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: 'Password',
+                  filled: true,
+                  fillColor: Colors.grey[200],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    final response = await AuthService().signIn(
+                      email: _emailController.text,
+                      password: _passwordController.text,
+                    );
+                    if (response.user != null) {
+                      widget.onLoginSuccess(_emailController.text);
+                    }
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Login failed: $e')),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Login'),
+              ),
+            ],
+            if (_showSignupFields) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: 'Create Password',
+                  filled: true,
+                  fillColor: Colors.grey[200],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _confirmPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: 'Confirm Password',
+                  filled: true,
+                  fillColor: Colors.grey[200],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  if (_passwordController.text == _confirmPasswordController.text) {
+                    try {
+                      final response = await AuthService().signUp(
+                        email: _emailController.text,
+                        password: _passwordController.text,
+                      );
+                      if (response.user != null) {
+                        widget.onLoginSuccess(_emailController.text);
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Signup failed: $e')),
+                      );
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Passwords do not match')),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Sign Up'),
+              ),
+            ],
             const SizedBox(height: 24),
             Row(
               children: [
@@ -119,8 +237,12 @@ class _AuthPageState extends State<AuthPage> {
             const SizedBox(height: 24),
             OutlinedButton.icon(
               onPressed: () {
-                // Handle Google sign in
-                widget.onLoginSuccess('google.user@gmail.com');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Google Sign In is not available at the moment'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
               },
               icon: Image.asset(
                 'assets/google.png',
