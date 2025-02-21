@@ -24,7 +24,8 @@ class _AuthPageState extends State<AuthPage> {
   bool _showSignupFields = false;
   bool _isLoading = false;
   bool _validateEmail(String email) {
-    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+    if (email.isEmpty) return false;
+    return RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(email);
   }
   Future<void> _handleEmailCheck() async {
     if (!mounted) return;
@@ -50,6 +51,64 @@ class _AuthPageState extends State<AuthPage> {
       );
     }
   }
+  Future<void> _handleSignIn() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final response = await AuthService().signIn(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+      if (response.user != null) {
+        if (!mounted) return;
+        widget.onLoginSuccess(_emailController.text);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Login failed: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  Future<void> _handleSignUp() async {
+    if (_passwordController.text == _confirmPasswordController.text) {
+      setState(() {
+        _isLoading = true;
+      });
+      try {
+        final response = await AuthService().signUp(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+        if (response.user != null) {
+          if (!mounted) return;
+          widget.onLoginSuccess(_emailController.text);
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Signup failed: ${e.toString()}')),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -62,9 +121,12 @@ class _AuthPageState extends State<AuthPage> {
             Container(
               height: 80,
               width: 80,
-              decoration: const BoxDecoration(
-                color: Colors.black,
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
+                image: DecorationImage(
+                  image: AssetImage('assets/avatar1.jpg'),
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             const SizedBox(height: 40),
@@ -93,7 +155,7 @@ class _AuthPageState extends State<AuthPage> {
                   ? _handleEmailCheck
                   : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
+                backgroundColor: const Color(0xFF8B5CF6),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -103,16 +165,18 @@ class _AuthPageState extends State<AuthPage> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(color: Colors.white),
+                      child: CircularProgressIndicator(color: Colors.black),
                     )
                   : const Text(
                       'Continue',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        color: Colors.black,
                       ),
                     ),
             ),
+            // Replace the sign in button with:
             if (_showPasswordField) ...[
               const SizedBox(height: 16),
               TextField(
@@ -130,32 +194,22 @@ class _AuthPageState extends State<AuthPage> {
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () async {
-                  try {
-                    final response = await AuthService().signIn(
-                      email: _emailController.text,
-                      password: _passwordController.text,
-                    );
-                    if (response.user != null) {
-                      widget.onLoginSuccess(_emailController.text);
-                    }
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Login failed: $e')),
-                    );
-                  }
-                },
+                onPressed: _handleSignIn,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
+                  backgroundColor: const Color(0xFF8B5CF6),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Login'),
+                child: const Text(
+                  'Sign In',
+                  style: TextStyle(color: Colors.black),
+                ),
               ),
             ],
-            if (_showSignupFields) ...[
+            // Replace the sign up button with:
+            if (_showSignupFields) ...[  // Show signup fields for new users
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
@@ -186,35 +240,18 @@ class _AuthPageState extends State<AuthPage> {
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () async {
-                  if (_passwordController.text == _confirmPasswordController.text) {
-                    try {
-                      final response = await AuthService().signUp(
-                        email: _emailController.text,
-                        password: _passwordController.text,
-                      );
-                      if (response.user != null) {
-                        widget.onLoginSuccess(_emailController.text);
-                      }
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Signup failed: $e')),
-                      );
-                    }
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Passwords do not match')),
-                    );
-                  }
-                },
+                onPressed: _handleSignUp,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
+                  backgroundColor: const Color(0xFF8B5CF6),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Sign Up'),
+                child: const Text(
+                  'Sign Up',  // Changed from 'Sign In' to 'Sign Up'
+                  style: TextStyle(color: Colors.black),
+                ),
               ),
             ],
             const SizedBox(height: 24),

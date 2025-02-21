@@ -26,21 +26,18 @@ class AuthService {
     return await _storage.read(key: 'supabase_anon_key') ?? 
            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlZmJ3ZGZxc2x2eWJlYnd5ZWJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzkzNjI3MTIsImV4cCI6MjA1NDkzODcxMn0.P8Es06ng0TEL6PeW5QEdNkUW7g1ED-YcDNdVrU0vCXE';
   }
-
   Future<bool> checkEmailExists(String email) async {
     try {
-      final response = await _supabase
-          .from('user_profiles')
+      final List<dynamic> response = await _supabase
+          .from('auth.users')
           .select('email')
-          .eq('email', email)
-          .single();
-      return response != null;
+          .eq('email', email);
+      return response.isNotEmpty;
     } catch (e) {
-      // If user is not found, return false
+      print('Error checking email: $e');
       return false;
     }
   }
-
   Future<AuthResponse> signUp({
     required String email,
     required String password,
