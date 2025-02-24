@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../pages/library_page.dart';
 import '../pages/config_page.dart';
+import '../component/appbar/docs.dart';
+import '../component/appbar/about.dart';
+import '../component/appbar/chat_history.dart';
 
 class Sidebar extends StatelessWidget {
   @override
@@ -45,24 +48,36 @@ class Sidebar extends StatelessWidget {
               leading: Icon(Icons.chat_bubble_outline),  // Changed from history
               title: Text('Chat History'),
               onTap: () {
-                print('Chat History selected');
-                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatHistory(),
+                  ),
+                );
               },
             ),
             ListTile(
               leading: Icon(Icons.help_outline),  // Changed from description
               title: Text('Docs'),
               onTap: () {
-                print('Docs selected');
-                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => Docs(),
+                  ),
+                );
               },
             ),
             ListTile(
               leading: Icon(Icons.info_outline),  // Changed from info
               title: Text('About'),
               onTap: () {
-                print('About selected');
-                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => About(),
+                  ),
+                );
               },
             ),
             ListTile(
