@@ -5,7 +5,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:system_info2/system_info2.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:llm/services/termux_service.dart';
 
 class ConfigPage extends StatefulWidget {
@@ -34,26 +33,26 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _loadStorageInfo() async {
     try {
-      // Get RAM information
       final totalRam = SysInfo.getTotalPhysicalMemory();
       final freeRam = SysInfo.getFreePhysicalMemory();
+      final usedRam = totalRam - freeRam;
+      final ramPercentage = ((usedRam / totalRam) * 100).toStringAsFixed(0);
       
-      // Get storage information using root directory
       final directory = Directory('/storage/emulated/0');
       final stat = await directory.statSync();
       final df = await Process.run('df', [directory.path]);
       final lines = df.stdout.toString().split('\n');
       if (lines.length > 1) {
         final values = lines[1].split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
-        final totalBytes = int.parse(values[1]) * 1024; // Convert KB to bytes
-        final freeBytes = int.parse(values[3]) * 1024;  // Convert KB to bytes
+        final totalBytes = int.parse(values[1]) * 1024;
+        final freeBytes = int.parse(values[3]) * 1024;
+        final usedBytes = totalBytes - freeBytes;
+        final storagePercentage = ((usedBytes / totalBytes) * 100).toStringAsFixed(0);
 
         setState(() {
           storageInfo = {
-            'Total RAM': '${(totalRam / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB',
-            'Free RAM': '${(freeRam / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB',
-            'Total Storage': '${(totalBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB',
-            'Available Storage': '${(freeBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB',
+            'System Memory': '${(usedRam / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB of ${(totalRam / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB ($ramPercentage%)',
+            'Local Storage': '${(usedBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB of ${(totalBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB ($storagePercentage%)',
           };
         });
       }
@@ -91,8 +90,12 @@ class _ConfigPageState extends State<ConfigPage> {
   }
   Widget _buildInfoCard(String title, List<MapEntry<String, String>> items, IconData icon) {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 8,
+      margin: EdgeInsets.symmetric(vertical: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
@@ -100,50 +103,82 @@ class _ConfigPageState extends State<ConfigPage> {
           children: [
             Row(
               children: [
-                Icon(icon, size: 24),
-                SizedBox(width: 8),
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 20, color: Theme.of(context).primaryColor),
+                ),
+                SizedBox(width: 12),
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
                 ),
               ],
             ),
-            Divider(height: 24),
+            Divider(height: 24, thickness: 1, color: Colors.grey[300]),
             ...items.map((item) => Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Flexible(
-                    flex: 3,
-                    child: Text(
-                      item.key,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
-                      ),
-                    ),
+                  Text(item.key, 
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500)
                   ),
-                  Flexible(
-                    flex: 2,
-                    child: Text(
-                      item.value,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.end,
+                  SizedBox(height: 4),
+                  if (item.key.contains('Storage') || item.key.contains('Memory'))
+                    _buildProgressBar(item.value)
+                  else
+                    Text(item.value, 
+                      style: TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w400)
                     ),
-                  ),
                 ],
               ),
             )).toList(),
           ],
         ),
       ),
+    );
+  }
+  
+  Widget _buildProgressBar(String value) {
+    final percentage = int.tryParse(value.split('(').last.split('%').first) ?? 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              value.split(' (')[0],
+              style: TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w400)
+            ),
+            Text(
+              '${percentage}%',
+              style: TextStyle(
+                fontSize: 14,
+                color: percentage > 90 ? Colors.red : 
+                       percentage > 70 ? Colors.orange : 
+                       Colors.grey[600],
+                fontWeight: FontWeight.w500
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8),
+        LinearProgressIndicator(
+          value: percentage / 100,
+          backgroundColor: Colors.grey[100],
+          valueColor: AlwaysStoppedAnimation<Color>(
+            percentage > 90 ? Colors.red.withOpacity(0.8) : 
+            percentage > 70 ? Colors.orange.withOpacity(0.8) : 
+            Theme.of(context).primaryColor.withOpacity(0.8),
+          ),
+          minHeight: 8,
+        ),
+      ],
     );
   }
   @override
@@ -247,6 +282,7 @@ class _ConfigPageState extends State<ConfigPage> {
       throw Exception('Could not launch $url');
     }
   }
+  // Update Termux card text sizes
   Widget _buildTermuxCard() {
       return Card(
         elevation: 4,
@@ -294,8 +330,16 @@ class _ConfigPageState extends State<ConfigPage> {
                           Text(
                             'Termux',
                             style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Quick Guide:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).primaryColor,
                             ),
                           ),
                           SizedBox(height: 4),
@@ -337,7 +381,7 @@ class _ConfigPageState extends State<ConfigPage> {
                       ElevatedButton.icon(
                         onPressed: _launchTermuxDownload,
                         icon: Icon(Icons.download_rounded, color: Colors.white),
-                        label: Text('Install Termux'),
+                        label: Text('Install'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Theme.of(context).primaryColor,
                           foregroundColor: Colors.white,
@@ -390,7 +434,7 @@ class _ConfigPageState extends State<ConfigPage> {
   Widget _buildGuideItem(String command, String description) {
     return Builder(
       builder: (BuildContext context) => Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
+        padding: EdgeInsets.symmetric(vertical: 6),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -407,7 +451,7 @@ class _ConfigPageState extends State<ConfigPage> {
                   style: TextStyle(
                     color: Colors.white,
                     fontFamily: 'monospace',
-                    fontSize: 13,
+                    fontSize: 12,
                   ),
                 ),
               ),
@@ -419,7 +463,7 @@ class _ConfigPageState extends State<ConfigPage> {
                 description,
                 style: TextStyle(
                   color: Colors.grey[600],
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
               ),
             ),
