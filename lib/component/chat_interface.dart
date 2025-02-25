@@ -307,114 +307,199 @@ class _ChatInterfaceState extends State<ChatInterface> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Column(
         children: [
           Expanded(
             child: _messages.isEmpty
-                ? _buildSuggestedMessages()
+                ? _buildEmptyState()
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.only(top: 16, bottom: 16),
                     itemCount: _messages.length,
-                    itemBuilder: (context, index) => _buildMessageBubble(_messages[index]),
+                    padding: EdgeInsets.only(bottom: 20),
+                    itemBuilder: (context, index) {
+                      return _buildMessageBubble(_messages[index]);
+                    },
                   ),
           ),
-          if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: LinearProgressIndicator(
-                backgroundColor: Colors.grey[300],
-                valueColor: const AlwaysStoppedAnimation(Color(0xFF8B5CF6)),
+          _buildInputArea(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Get Plus',
+                      style: TextStyle(
+                        color: Color(0xFF6366F1),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Icon(Icons.add, color: Color(0xFF6366F1)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: Image.asset(
+              'assets/images/logo.png', // Make sure to add this image
+              width: 48,
+              height: 48,
+              color: Colors.grey[300],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 100),
+          child: Column(
+            children: [
+              _buildSuggestionCard(
+                "Create a cartoon",
+                "illustration of my pet",
+                Icons.brush_outlined,
+              ),
+              SizedBox(height: 12),
+              _buildSuggestionCard(
+                "What can PocketLLM do",
+                "and how to get started",
+                Icons.help_outline,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+  Widget _buildSuggestionCard(String title, String subtitle, IconData icon) {
+    return InkWell(
+      onTap: () {
+        _messageController.text = "$title: $subtitle";
+        _sendMessage();
+      },
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
               ),
             ),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
-                ),
-              ],
+            SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    _buildWebIcon(),
-                    const SizedBox(width: 8),
-                    _buildModelSelector(),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.attach_file, color: Color(0xFF8B5CF6)),
-                      onPressed: () {
-                        // Handle attachment functionality
-                      },
-                    ),
-                    Expanded(
-                      child: Container(
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: TextField(
-                          controller: _messageController,
-                          maxLines: null,
-                          decoration: InputDecoration(
-                            hintText: 'Type a message...',
-                            hintStyle: TextStyle(color: Colors.grey[500]),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
+          ],
+        ),
+      ),
+    );
+  }
+  Widget _buildInputArea() {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+      margin: EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 56, // Increased height
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.camera_alt_outlined),
+                    onPressed: () {},
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.image_outlined),
+                    onPressed: () {},
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.folder_outlined),
+                    onPressed: () {},
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: 'Message',
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16),
                       ),
+                      onSubmitted: (value) => _sendMessage(),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.mic, color: Color(0xFF8B5CF6), size: 32),
-                      onPressed: () {
-                        // Handle voice input functionality
-                      },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.mic),
+                    onPressed: () {},
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.public,
+                      color: _isOnline ? Colors.green : Colors.grey,
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: _isLoading ? const Color(0xFF8B5CF6) : const Color(0xFF8B5CF6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation(Colors.white),
-                                ),
-                              )
-                            : const Icon(Icons.send, color: Colors.white),
-                        onPressed: _isLoading ? null : _sendMessage,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    onPressed: () {
+                      setState(() {
+                        _isOnline = !_isOnline;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(width: 8),
+          FloatingActionButton(
+            mini: true,
+            backgroundColor: Color(0xFF8B5CF6),
+            onPressed: _sendMessage,
+            child: Icon(
+              _isLoading ? Icons.auto_awesome : Icons.send,
+              color: Colors.white,
             ),
           ),
         ],
       ),
     );
   }
-
   Widget _buildMessageBubble(Message message) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),

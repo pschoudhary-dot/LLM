@@ -16,124 +16,172 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Settings'),
+        backgroundColor: Colors.grey[50],
         elevation: 0,
-        backgroundColor: Colors.transparent,
-        flexibleSpace: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              color: Colors.white.withOpacity(0.2),
-            ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.black, size: 28),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Settings',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _buildSettingsSection(
-              'Profile Settings',
-              Icons.person_outline,
-              'Customize your profile and preferences',
-              () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => ProfileSettingsPage(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _buildSettingsSection(
-              'Model Configurations',
-              Icons.psychology,
-              'Configure AI models and parameters',
-              () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => ModelSettingsPage(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _buildSettingsSection(
-              'Search Settings',
-              Icons.search,
-              'Configure search behavior and sources',
-              () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => SearchSettingsPage(),
-                  ),
-                );
-              },
-            ),
-          ],
+      body: ListView(
+        padding: EdgeInsets.all(16),
+        children: [
+          _buildSectionTitle('Account'),
+          _buildSettingsItem(
+            icon: Icons.person_outline,
+            iconColor: Colors.blue,
+            title: 'Profile Settings',
+            subtitle: 'Manage your account and preferences',
+          ),
+          _buildSettingsItem(
+            icon: Icons.notifications_outlined,
+            iconColor: Colors.orange,
+            title: 'Notifications',
+            subtitle: 'Configure app notifications',
+          ),
+          
+          SizedBox(height: 32),
+          _buildSectionTitle('AI Configuration'),
+          _buildSettingsItem(
+            icon: Icons.psychology,
+            iconColor: Colors.purple,
+            title: 'Model Settings',
+            subtitle: 'Configure AI models and parameters',
+          ),
+          _buildSettingsItem(
+            icon: Icons.search,
+            iconColor: Colors.green,
+            title: 'Search Configuration',
+            subtitle: 'Customize search behavior and sources',
+          ),
+          
+          SizedBox(height: 32),
+          _buildSectionTitle('Database'),
+          _buildSettingsItem(
+            icon: Icons.schema,
+            iconColor: Colors.indigo,
+            title: 'Vector Databases',
+            subtitle: 'Manage embeddings and vector storage',
+          ),
+          _buildSettingsItem(
+            icon: Icons.share,
+            iconColor: Colors.blue,
+            title: 'Graph Databases',
+            subtitle: 'Configure knowledge graph settings',
+          ),
+          
+          SizedBox(height: 32),
+          _buildSectionTitle('Security'),
+          _buildSettingsItem(
+            icon: Icons.security,
+            iconColor: Colors.green,
+            title: 'Privacy',
+            subtitle: 'Manage data and privacy settings',
+          ),
+          _buildSettingsItem(
+            icon: Icons.key,
+            iconColor: Colors.orange,
+            title: 'API Keys',
+            subtitle: 'Manage API keys and authentication',
+          ),
+          
+          SizedBox(height: 32),
+          _buildSectionTitle('Advanced'),
+          _buildSettingsItem(
+            icon: Icons.memory,
+            iconColor: Colors.deepPurple,
+            title: 'Memory Management',
+            subtitle: 'Configure context and history settings',
+          ),
+          _buildSettingsItem(
+            icon: Icons.terminal,
+            iconColor: Colors.grey[800]!,
+            title: 'Developer Options',
+            subtitle: 'Advanced configuration and debugging',
+          ),
+          _buildSettingsItem(
+            icon: Icons.backup,
+            iconColor: Colors.teal,
+            title: 'Backup & Sync',
+            subtitle: 'Manage data backup and synchronization',
+          ),
+          
+          SizedBox(height: 32),
+          _buildSectionTitle('About'),
+          _buildSettingsItem(
+            icon: Icons.info_outline,
+            iconColor: Colors.blue,
+            title: 'App Information',
+            subtitle: 'Version, licenses, and documentation',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.bold,
+          color: Colors.black,
         ),
       ),
     );
   }
 
-  Widget _buildSettingsSection(
-    String title,
-    IconData icon,
-    String description,
-    VoidCallback onTap,
-  ) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+  Widget _buildSettingsItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  size: 28,
-                  color: Theme.of(context).primaryColor,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
-            ],
+      child: ListTile(
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: iconColor),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 14,
+          ),
+        ),
+        onTap: () {
+          // Handle item tap
+        },
       ),
     );
   }

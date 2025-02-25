@@ -20,42 +20,58 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       child: ClipRRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: AppBar(
-            backgroundColor: Colors.white.withOpacity(0.2),
-            elevation: 0,
-            title: Text(
-              appName,
-              style: TextStyle(
-                fontFamily: 'Roboto',
-                fontSize: 20,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.grey.withOpacity(0.2),
+                  width: 0.5,
+                ),
               ),
             ),
-            leading: IconButton(
-              icon: Icon(Icons.menu),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
-            ),
-            actions: [
-              IconButton(
-                icon: Icon(Icons.create_outlined),
-                onPressed: () {
-                  // Handle new chat
-                  print('New Chat pressed');
-                },
-              ),
-              IconButton(
-                icon: Icon(Icons.settings),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SettingsPage(),
+            child: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: Row(
+                children: [
+                  Text(
+                    'PocketLLM',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
                     ),
-                  );
-                },
+                  ),
+                  SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    color: Colors.black54,
+                    size: 20,
+                  ),
+                ],
               ),
-            ],
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.add, color: Colors.black87),
+                  onPressed: () {
+                    // Handle new chat
+                    print('New Chat pressed');
+                  },
+                ),
+                IconButton(
+                  icon: Icon(Icons.settings_outlined, color: Colors.black87),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsPage(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
