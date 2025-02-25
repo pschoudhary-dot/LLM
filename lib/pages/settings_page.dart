@@ -4,7 +4,7 @@ import 'dart:ui';
 import 'settings/profile_settings.dart';
 import 'settings/model_settings.dart';
 import 'settings/search_settings.dart';
-
+import '../component/input_config_dialog.dart';  // Add this line
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
 
@@ -57,6 +57,14 @@ class _SettingsPageState extends State<SettingsPage> {
             iconColor: Colors.purple,
             title: 'Model Settings',
             subtitle: 'Configure AI models and parameters',
+            showActionButtons: true,  // Add this line
+          ),
+          _buildSettingsItem(
+            icon: Icons.search,
+            iconColor: Colors.green,
+            title: 'Search Configuration',
+            subtitle: 'Customize search behavior and sources',
+            showActionButtons: true,  // Add this line
           ),
           _buildSettingsItem(
             icon: Icons.search,
@@ -148,6 +156,7 @@ class _SettingsPageState extends State<SettingsPage> {
     required Color iconColor,
     required String title,
     required String subtitle,
+    bool showActionButtons = false,  // Add this parameter
   }) {
     return Container(
       margin: EdgeInsets.only(bottom: 8),
@@ -179,6 +188,36 @@ class _SettingsPageState extends State<SettingsPage> {
             fontSize: 14,
           ),
         ),
+        trailing: showActionButtons ? Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.add, color: Color(0xFF8B5CF6)),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => PermissionDialog(
+                    title: 'Configure $title',
+                    description: 'Add new configuration for $title',
+                    onContinue: () {
+                      Navigator.of(context).pop();
+                      // Handle configuration
+                    },
+                    onCancel: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                );
+              },
+            ),
+            IconButton(
+              icon: Icon(Icons.expand_more, color: Colors.grey[600]),
+              onPressed: () {
+                // Handle expand
+              },
+            ),
+          ],
+        ) : null,
         onTap: () {
           // Handle item tap
         },

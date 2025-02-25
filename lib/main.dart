@@ -15,6 +15,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.purple,
       ),
+      debugShowCheckedModeBanner: false, // Removes the debug banner
       home: SplashLoader(),
     );
   }
