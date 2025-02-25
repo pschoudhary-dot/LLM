@@ -75,8 +75,8 @@ class ModelsRepository {
       tools: ['tools'],
     ),
   ];
-
-  static List<AIModel> getAvailableModels() {
+  // Change this method to return Future
+  static Future<List<AIModel>> getAvailableModels() async {
     final sortedModels = List<AIModel>.from(models);
     sortedModels.sort((a, b) => b.releaseDate.compareTo(a.releaseDate));
     return sortedModels;
