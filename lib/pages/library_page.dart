@@ -64,14 +64,44 @@ class _LibraryPageState extends State<LibraryPage> {
             ),
             SizedBox(height: 12),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                _buildTag('Latest', Colors.blue),
-                _buildTag('128K Context', Colors.purple),
-                _buildTag('Fast', Colors.green),
+                ...model.parameterVariants.map((variant) => Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFEEF2FF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    variant,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF6366F1),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                )),
+                if (model.tools.contains('tools'))
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'tools',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.purple.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
               ],
             ),
+            SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [_buildTag('Latest', Colors.blue),_buildTag('128K Context', Colors.purple),_buildTag('Fast', Colors.green),]),
             SizedBox(height: 12),
             Text(
               model.description,
@@ -87,7 +117,7 @@ class _LibraryPageState extends State<LibraryPage> {
                   child: ElevatedButton(
                     onPressed: () {},
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple,
+                      backgroundColor: Color(0xFF8B5CF6),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -146,70 +176,75 @@ class _LibraryPageState extends State<LibraryPage> {
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 12),
-                                  child: Icon(Icons.search, color: Colors.grey[600], size: 20),
+            ClipRRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  color: Colors.white.withOpacity(0.8),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                Expanded(
-                                  child: TextField(
-                                    decoration: InputDecoration(
-                                      hintText: 'Search models...',
-                                      hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                                      border: InputBorder.none,
-                                      contentPadding: EdgeInsets.zero,
+                                child: Row(
+                                  children: [
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 12),
+                                      child: Icon(Icons.search, color: Colors.grey[600], size: 20),
                                     ),
-                                    onChanged: (value) => setState(() => _filterText = value),
-                                  ),
+                                    Expanded(
+                                      child: TextField(
+                                        decoration: InputDecoration(
+                                          hintText: 'Search models...',
+                                          hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                                          border: InputBorder.none,
+                                          contentPadding: EdgeInsets.zero,
+                                        ),
+                                        onChanged: (value) => setState(() => _filterText = value),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.tune, color: Colors.grey[600], size: 20),
+                                      onPressed: () {
+                                        // Handle filter options
+                                      },
+                                    ),
+                                  ],
                                 ),
-                                IconButton(
-                                  icon: Icon(Icons.tune, color: Colors.grey[600], size: 20),
-                                  onPressed: () {
-                                    // Handle filter options
-                                  },
-                                ),
-                              ],
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            children: _categories.map((category) {
+                              return Padding(
+                                padding: EdgeInsets.only(right: 8),
+                                child: _buildCategoryChip(
+                                  category, 
+                                  category == _selectedCategory,
+                                ),
+                              );
+                            }).toList(),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          _buildCategoryChip('All Models', true),
-                          SizedBox(width: 8),
-                          _buildCategoryChip('Language', false),
-                          SizedBox(width: 8),
-                          _buildCategoryChip('Image', false),
-                          SizedBox(width: 8),
-                          _buildCategoryChip('Audio', false),
-                        ],
                       ),
-                    ),
+                      SizedBox(height: 8),
+                    ],
                   ),
-                  SizedBox(height: 8),
-                ],
+                ),
               ),
             ),
             Expanded(
@@ -237,25 +272,29 @@ class _LibraryPageState extends State<LibraryPage> {
       ),
     );
   }
-}
+
   
   Widget _buildCategoryChip(String label, bool isSelected) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isSelected ? Colors.black : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isSelected ? Colors.black : Colors.grey[300]!,
+    return GestureDetector(
+      onTap: () => setState(() => _selectedCategory = label),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.black : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.black : Colors.grey[300]!,
+          ),
         ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? Colors.white : Colors.black,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
   }
+}

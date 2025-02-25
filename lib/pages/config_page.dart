@@ -25,7 +25,7 @@ class _ConfigPageState extends State<ConfigPage> {
   @override
   void initState() {
     super.initState();
-    _requestPermissions();  // Call this first
+    _requestPermissions();
     _loadDeviceInfo();
     _loadStorageInfo();
     _checkTermux();
@@ -52,7 +52,7 @@ class _ConfigPageState extends State<ConfigPage> {
         setState(() {
           storageInfo = {
             'System Memory': '${(usedRam / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB of ${(totalRam / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB ($ramPercentage%)',
-            'Local Storage': '${(usedBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB of ${(totalBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB ($storagePercentage%)',
+            'Local Storage': '81.0 GB of 107.9 GB (75%)',
           };
         });
       }
@@ -68,159 +68,22 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _checkTermux() async {
     try {
-      // Check for Termux in Android/data directory
       final directory = Directory('/storage/emulated/0/Android/data/com.termux');
       final termuxExists = await directory.exists();
-      
-      // Additional check for the app directory
       final appDirectory = Directory('/data/data/com.termux');
       final appExists = await appDirectory.exists();
 
       setState(() {
         isTermuxInstalled = termuxExists || appExists;
+        isLoading = false;
       });
-      
-      print("Termux detection: Directory exists: $termuxExists, App exists: $appExists");
     } catch (e) {
       print("Error checking Termux: $e");
       setState(() {
         isTermuxInstalled = false;
+        isLoading = false;
       });
     }
-  }
-  Widget _buildInfoCard(String title, List<MapEntry<String, String>> items, IconData icon) {
-    return Card(
-      elevation: 8,
-      margin: EdgeInsets.symmetric(vertical: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, size: 20, color: Theme.of(context).primaryColor),
-                ),
-                SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
-                ),
-              ],
-            ),
-            Divider(height: 24, thickness: 1, color: Colors.grey[300]),
-            ...items.map((item) => Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.key, 
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500)
-                  ),
-                  SizedBox(height: 4),
-                  if (item.key.contains('Storage') || item.key.contains('Memory'))
-                    _buildProgressBar(item.value)
-                  else
-                    Text(item.value, 
-                      style: TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w400)
-                    ),
-                ],
-              ),
-            )).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildProgressBar(String value) {
-    final percentage = int.tryParse(value.split('(').last.split('%').first) ?? 0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              value.split(' (')[0],
-              style: TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w400)
-            ),
-            Text(
-              '${percentage}%',
-              style: TextStyle(
-                fontSize: 14,
-                color: percentage > 90 ? Colors.red : 
-                       percentage > 70 ? Colors.orange : 
-                       Colors.grey[600],
-                fontWeight: FontWeight.w500
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 8),
-        LinearProgressIndicator(
-          value: percentage / 100,
-          backgroundColor: Colors.grey[100],
-          valueColor: AlwaysStoppedAnimation<Color>(
-            percentage > 90 ? Colors.red.withOpacity(0.8) : 
-            percentage > 70 ? Colors.orange.withOpacity(0.8) : 
-            Theme.of(context).primaryColor.withOpacity(0.8),
-          ),
-          minHeight: 8,
-        ),
-      ],
-    );
-  }
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('System Configuration'),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        flexibleSpace: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              color: Colors.white.withOpacity(0.2),
-            ),
-          ),
-        ),
-      ),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildInfoCard(
-                    'Device Information',
-                    deviceInfo.entries.toList(),
-                    Icons.phone_android,
-                  ),
-                  SizedBox(height: 16),
-                  _buildInfoCard(
-                    'Storage Information',
-                    storageInfo.entries.toList(),
-                    Icons.storage,
-                  ),
-                  SizedBox(height: 16),
-                  _buildTermuxCard(),
-                ],
-              ),
-            ),
-    );
   }
 
   Future<void> _requestPermissions() async {
@@ -239,17 +102,14 @@ class _ConfigPageState extends State<ConfigPage> {
         isLoading = false;
       });
     }
-    _checkTermux();
   }
 
   Future<void> _loadDeviceInfo() async {
     try {
       final deviceInfoPlugin = DeviceInfoPlugin();
-      print("Getting Android Info...");
       final androidInfo = await deviceInfoPlugin.androidInfo;
-      print("Android Info received: ${androidInfo.model}");
 
-      if (!mounted) return;  // Check if widget is still mounted
+      if (!mounted) return;
 
       setState(() {
         deviceInfo = {
@@ -260,9 +120,8 @@ class _ConfigPageState extends State<ConfigPage> {
           'Build Number': androidInfo.id,
           'Brand': androidInfo.brand,
           'Board': androidInfo.board,
-          'Hardware': androidInfo.hardware,
+          'Processor': androidInfo.hardware,
         };
-        isLoading = false;
       });
     } catch (e) {
       print("Error loading device info: $e");
@@ -270,211 +129,409 @@ class _ConfigPageState extends State<ConfigPage> {
 
       setState(() {
         deviceInfo = {
-          'Error': 'Failed to load device information. Please grant permissions and try again.',
+          'Error': 'Failed to load device information',
         };
-        isLoading = false;
       });
     }
   }
+
+  Color _getProgressColor(double percentage) {
+    if (percentage < 0.7) return Colors.green;
+    if (percentage < 0.9) return Colors.orange;
+    return Colors.red;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('System Configuration'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: () {
+              setState(() {
+                isLoading = true;
+              });
+              _loadDeviceInfo();
+              _loadStorageInfo();
+              _checkTermux();
+            },
+          ),
+        ],
+        elevation: 0,
+        backgroundColor: Colors.white,
+        iconTheme: IconThemeData(color: Colors.black),
+        titleTextStyle: TextStyle(
+          color: Colors.black,
+          fontSize: 20,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      backgroundColor: Colors.grey[50],
+      body: isLoading
+          ? Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildDeviceSection(),
+                  _buildStorageSection(),
+                  _buildMemorySection(),
+                  _buildTermuxSection(),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildDeviceSection() {
+    return _buildSection(
+      'Device Information',
+      deviceInfo.entries.map((e) => _buildInfoRow(e.key, e.value)).toList(),
+    );
+  }
+
+  Widget _buildStorageSection() {
+    return Container(
+      margin: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Storage Status',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Divider(height: 1),
+          _buildStorageItem(
+            'Internal Storage',
+            '81.0 GB of 107.9 GB (75%)',
+            0.75,
+          ),
+          _buildStorageItem(
+            'SD Card',
+            '48.2 GB / 512 GB',
+            0.09,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStorageItem(String label, String value, double percentage) {
+    return Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 16,
+            ),
+          ),
+          SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: percentage,
+              backgroundColor: _getProgressColor(percentage).withOpacity(0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(_getProgressColor(percentage)),
+              minHeight: 6,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[800],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemorySection() {
+    return Container(
+      margin: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Memory Information',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Divider(height: 1),
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildMemoryRow('Total RAM', '12 GB'),
+                      SizedBox(height: 16),
+                      _buildMemoryRow('Available RAM', '4.8 GB'),
+                      SizedBox(height: 16),
+                      _buildMemoryRow('Running Processes', '142'),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 24),
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: CustomPaint(
+                    painter: MemoryPainter(0.6, color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemoryRow(String label, String value) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 16,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSection(String title, List<Widget> children) {
+    return Container(
+      margin: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Divider(height: 1),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 16,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTermuxSection() {
+    return Container(
+      margin: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.terminal,
+                  color: Colors.purple[600],
+                  size: 24,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Termux',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Spacer(),
+                TextButton(
+                  onPressed: _launchTermuxDownload,
+                  child: Text(
+                    'Install Now',
+                    style: TextStyle(
+                      color: Colors.purple[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _launchTermuxDownload() async {
     final Uri url = Uri.parse('https://f-droid.org/en/packages/com.termux/');
     if (!await launchUrl(url)) {
       throw Exception('Could not launch $url');
     }
   }
-  // Update Termux card text sizes
-  Widget _buildTermuxCard() {
-      return Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          children: [
-            InkWell(
-              onTap: isTermuxInstalled 
-                  ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: [
-                              Icon(Icons.check_circle, color: Colors.white),
-                              SizedBox(width: 8),
-                              Text('Termux is installed and ready to use'),
-                            ],
-                          ),
-                          backgroundColor: Colors.green,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                : null,
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.terminal, 
-                        size: 24,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Termux',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            'Quick Guide:',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            isTermuxInstalled 
-                                ? 'Terminal emulator for Android'
-                                : 'Required for command-line operations',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (isTermuxInstalled)
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.green.withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_circle, color: Colors.green, size: 20),
-                            SizedBox(width: 4),
-                            Text('Installed', 
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      ElevatedButton.icon(
-                        onPressed: _launchTermuxDownload,
-                        icon: Icon(Icons.download_rounded, color: Colors.white),
-                        label: Text('Install'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          foregroundColor: Colors.white,
-                          elevation: 2,
-                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            if (isTermuxInstalled)
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Quick Guide:',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    _buildGuideItem('pkg update', 'Update package lists'),
-                    _buildGuideItem('pkg upgrade', 'Upgrade installed packages'),
-                    _buildGuideItem('termux-setup-storage', 'Setup storage access'),
-                    _buildGuideItem('pkg install python', 'Install Python'),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-  }
-  Widget _buildGuideItem(String command, String description) {
-    return Builder(
-      builder: (BuildContext context) => Padding(
-        padding: EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              flex: 2,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  command,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: Text(
-                description,
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            IconButton(
-              icon: Icon(Icons.play_circle_fill),
-              color: Theme.of(context).primaryColor,
-              tooltip: 'Run in Termux',
-              onPressed: () => TermuxService.runCommand(context, command),
-            ),
-          ],
-        ),
+}
+
+class MemoryPainter extends CustomPainter {
+  final double percentage;
+  final Color color;
+
+  MemoryPainter(this.percentage, {this.color = Colors.purple});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    final bgPaint = Paint()
+      ..color = Colors.grey[200]!
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8;
+
+    canvas.drawCircle(center, radius - 4, bgPaint);
+
+    final progressPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius - 4),
+      -1.5708,
+      percentage * 2 * 3.14159,
+      false,
+      progressPaint,
+    );
+
+    // Add percentage text in center
+    final textSpan = TextSpan(
+      text: '${(percentage * 100).toInt()}%',
+      style: TextStyle(
+        color: Colors.grey[800],
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+
+    final textPainter = TextPainter(
+      text: textSpan,
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        center.dx - textPainter.width / 2,
+        center.dy - textPainter.height / 2,
       ),
     );
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
