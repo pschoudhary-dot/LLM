@@ -64,7 +64,10 @@ class _SettingsPageState extends State<SettingsPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => ModelSettingsPage()),
-              );
+              ).then((_) {
+                // Refresh the state when returning from the model settings page
+                setState(() {});
+              });
             },
             onAddPressed: () {
               showDialog(
@@ -72,6 +75,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 builder: (context) => ModelConfigDialog(
                   onSave: (config) async {
                     await ModelService.saveModelConfig(config);
+                    // If this is the first model, set it as selected
+                    final configs = await ModelService.getModelConfigs();
+                    if (configs.length == 1) {
+                      await ModelService.setSelectedModel(config.id);
+                    }
+                    setState(() {});
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Model configuration saved')),
                     );
@@ -86,6 +95,16 @@ class _SettingsPageState extends State<SettingsPage> {
             title: 'Search Configuration',
             subtitle: 'Customize search behavior and sources',
             showActionButtons: true,
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Search settings coming soon')),
+              );
+            },
+            onAddPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Search configuration coming soon')),
+              );
+            },
           ),
           
           SizedBox(height: 32),
@@ -181,67 +200,66 @@ class _SettingsPageState extends State<SettingsPage> {
     VoidCallback? onTap,
     VoidCallback? onAddPressed,
   }) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey[200]!),
       ),
-      child: ListTile(
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: iconColor),
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 14,
-          ),
-        ),
-        trailing: showActionButtons ? Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(Icons.add, color: Color(0xFF8B5CF6)),
-              onPressed: onAddPressed ?? () {
-                showDialog(
-                  context: context,
-                  builder: (context) => PermissionDialog(
-                    title: 'Configure $title',
-                    description: 'Add new configuration for $title',
-                    onContinue: () {
-                      Navigator.of(context).pop();
-                      // Handle configuration
-                    },
-                    onCancel: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                );
-              },
-            ),
-            IconButton(
-              icon: Icon(Icons.expand_more, color: Colors.grey[600]),
-              onPressed: () {
-                // Handle expand
-              },
-            ),
-          ],
-        ) : Icon(Icons.chevron_right, color: Colors.grey[400]),
+      child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 24),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (showActionButtons)
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.add_circle_outline, color: Color(0xFF8B5CF6)),
+                      onPressed: onAddPressed,
+                    ),
+                    Icon(Icons.chevron_right, color: Colors.grey[400]),
+                  ],
+                )
+              else
+                Icon(Icons.chevron_right, color: Colors.grey[400]),
+            ],
+          ),
+        ),
       ),
     );
   }

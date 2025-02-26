@@ -7,7 +7,7 @@ import 'models.dart';
 import 'tavily_service.dart';
 import 'chat_history_manager.dart'; // Import the new chat history manager
 import '../services/chat_service.dart';
-import '../services/model_service.dart';
+import '../services/model_service.dart' as service;
 import 'package:animated_text_kit/animated_text_kit.dart';
 
 class ChatInterface extends StatefulWidget {
@@ -25,7 +25,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
   String? _selectedModelId;
-  ModelConfig? _selectedModelConfig;
+  service.ModelConfig? _selectedModelConfig;
   final String apiKey = 'ddc-m4qlvrgpt1W1E4ZXc4bvm5T5Z6CRFLeXRCx9AbRuQOcGpFFrX2';
   final String apiUrl = 'https://api.sree.shop/v1/chat/completions';
   final TavilyService _tavilyService = TavilyService();
@@ -48,9 +48,9 @@ class _ChatInterfaceState extends State<ChatInterface> {
 
   Future<void> _loadSelectedModel() async {
     try {
-      final selectedId = await ModelService.getSelectedModel();
+      final selectedId = await service.ModelService.getSelectedModel();
       if (selectedId != null) {
-        final configs = await ModelService.getModelConfigs();
+        final configs = await service.ModelService.getModelConfigs();
         final config = configs.firstWhere(
           (config) => config.id == selectedId,
           orElse: () => throw Exception('Selected model not found'),
@@ -110,7 +110,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
     
     // Add a thinking message for Ollama models
     Message? thinkingMessage;
-    if (_selectedModelConfig!.provider == ModelProvider.ollama) {
+    if (_selectedModelConfig!.provider == service.ModelProvider.ollama) {
       thinkingMessage = Message(
         content: 'Thinking...',
         isUser: false,
@@ -448,6 +448,20 @@ class _ChatInterfaceState extends State<ChatInterface> {
     );
   }
   Widget _buildMessageBubble(Message message) {
+    // Extract thinking content if present
+    String displayContent = message.content;
+    String? thinkingContent;
+    
+    if (!message.isUser && !message.isThinking) {
+      final thinkRegex = RegExp(r'<think>(.*?)</think>', dotAll: true);
+      final match = thinkRegex.firstMatch(displayContent);
+      
+      if (match != null) {
+        thinkingContent = match.group(1)?.trim();
+        displayContent = displayContent.replaceAll(thinkRegex, '').trim();
+      }
+    }
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: Row(
@@ -491,20 +505,107 @@ class _ChatInterfaceState extends State<ChatInterface> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: message.isThinking
                       ? _buildThinkingIndicator()
-                      : MarkdownBody(
-                          data: message.content,
-                          styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                            p: TextStyle(
-                              color: message.isUser ? Colors.white : Colors.black87,
-                              fontSize: 16,
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            MarkdownBody(
+                              data: displayContent,
+                              styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                                p: TextStyle(
+                                  color: message.isUser ? Colors.white : Colors.black87,
+                                  fontSize: 16,
+                                ),
+                                code: TextStyle(
+                                  backgroundColor: Colors.grey[200],
+                                  color: Colors.black87,
+                                  fontFamily: 'monospace',
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
-                            code: TextStyle(
-                              backgroundColor: Colors.grey[200],
-                              color: Colors.black87,
-                              fontFamily: 'monospace',
-                              fontSize: 14,
-                            ),
-                          ),
+                            
+                            // Thinking content expandable section
+                            if (thinkingContent != null) ...[
+                              SizedBox(height: 12),
+                              Divider(color: Colors.grey[300]),
+                              ExpansionTile(
+                                title: Text(
+                                  'Thinking',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF8B5CF6),
+                                  ),
+                                ),
+                                collapsedIconColor: Color(0xFF8B5CF6),
+                                iconColor: Color(0xFF8B5CF6),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Text(
+                                      thinkingContent,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[700],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            
+                            // Sources expandable section
+                            if (message.sources != null && message.sources!.isNotEmpty) ...[
+                              SizedBox(height: 12),
+                              Divider(color: Colors.grey[300]),
+                              ExpansionTile(
+                                title: Text(
+                                  'Sources (${message.sources!.length})',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.green[700],
+                                  ),
+                                ),
+                                collapsedIconColor: Colors.green[700],
+                                iconColor: Colors.green[700],
+                                children: message.sources!.map((source) => ListTile(
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  title: Text(
+                                    source.title,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(height: 4),
+                                      Text(
+                                        source.snippet,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        source.url,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.blue,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )).toList(),
+                              ),
+                            ],
+                          ],
                         ),
                 ),
                 const SizedBox(height: 4),
@@ -616,5 +717,23 @@ class _ChatInterfaceState extends State<ChatInterface> {
         ),
       ],
     );
+  }
+
+  // Helper method to get provider icon
+  IconData _getProviderIcon() {
+    if (_selectedModelConfig == null) return Icons.psychology;
+    
+    switch (_selectedModelConfig!.provider) {
+      case service.ModelProvider.ollama:
+        return Icons.terminal;
+      case service.ModelProvider.openAI:
+        return Icons.auto_awesome;
+      case service.ModelProvider.anthropic:
+        return Icons.psychology;
+      case service.ModelProvider.llmStudio:
+        return Icons.science;
+      default:
+        return Icons.psychology;
+    }
   }
 }

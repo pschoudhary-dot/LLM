@@ -170,10 +170,18 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
           SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: _addNewModel,
-            icon: Icon(Icons.add),
-            label: Text('Add Model'),
+            icon: Icon(Icons.add, color: Colors.white),
+            label: Text(
+              'Add Model',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Color(0xFF8B5CF6),
+              foregroundColor: Colors.white,
               padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

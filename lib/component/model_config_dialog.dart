@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/model_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ModelConfigDialog extends StatefulWidget {
   final ModelConfig? existingConfig;
@@ -21,6 +23,9 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
   late TextEditingController _modelIdController;
   late TextEditingController _baseUrlController;
   late TextEditingController _apiKeyController;
+  late TextEditingController _systemPromptController;
+  late TextEditingController _temperatureController;
+  late TextEditingController _apiUrlController;
   
   ModelProvider _selectedProvider = ModelProvider.ollama;
   bool _isLoading = false;
@@ -28,6 +33,8 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
   bool _connectionSuccess = false;
   List<String> _availableModels = [];
   bool _isLoadingModels = false;
+  bool _isFetchingApiModels = false;
+  List<String> _apiModels = [];
 
   @override
   void initState() {
@@ -39,12 +46,25 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
       _modelIdController = TextEditingController(text: widget.existingConfig!.id);
       _baseUrlController = TextEditingController(text: widget.existingConfig!.baseUrl);
       _apiKeyController = TextEditingController(text: widget.existingConfig!.apiKey ?? '');
-      _selectedProvider = widget.existingConfig!.provider;
+      
+      // Initialize additional parameters
+      final additionalParams = widget.existingConfig!.additionalParams ?? {};
+      _systemPromptController = TextEditingController(text: additionalParams['systemPrompt'] ?? '');
+      _temperatureController = TextEditingController(text: (additionalParams['temperature'] ?? 0.7).toString());
+      _apiUrlController = TextEditingController(text: additionalParams['apiUrl'] ?? '');
     } else {
       _nameController = TextEditingController();
       _modelIdController = TextEditingController();
       _baseUrlController = TextEditingController(text: ModelService.defaultOllamaUrl);
       _apiKeyController = TextEditingController();
+      _systemPromptController = TextEditingController();
+      _temperatureController = TextEditingController(text: '0.7');
+      _apiUrlController = TextEditingController();
+    }
+    
+    // If provider is Ollama, load models automatically
+    if (_selectedProvider == ModelProvider.ollama) {
+      _loadOllamaModels();
     }
   }
 
@@ -54,6 +74,9 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
     _modelIdController.dispose();
     _baseUrlController.dispose();
     _apiKeyController.dispose();
+    _systemPromptController.dispose();
+    _temperatureController.dispose();
+    _apiUrlController.dispose();
     super.dispose();
   }
 
@@ -82,6 +105,82 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
     }
   }
 
+  // Fetch models from API URL
+  Future<void> _fetchModelsFromApi() async {
+    if (_apiUrlController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter an API URL')),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isFetchingApiModels = true;
+      _apiModels = [];
+    });
+    
+    try {
+      final url = _apiUrlController.text.trim();
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        List<String> models = [];
+        
+        // Try to extract models based on common API formats
+        if (data['data'] != null && data['data'] is List) {
+          // OpenAI-like format
+          final modelsList = data['data'] as List;
+          models = modelsList
+              .map((model) => model['id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList();
+        } else if (data['models'] != null && data['models'] is List) {
+          // Ollama-like format
+          final modelsList = data['models'] as List;
+          models = modelsList
+              .map((model) => model['name']?.toString() ?? model['id']?.toString() ?? '')
+              .where((name) => name.isNotEmpty)
+              .toList();
+        }
+        
+        setState(() {
+          _apiModels = models;
+          _isFetchingApiModels = false;
+        });
+        
+        if (models.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No models found in the API response')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Found ${models.length} models')),
+          );
+        }
+      } else {
+        setState(() {
+          _isFetchingApiModels = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to fetch models: ${response.statusCode}')),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isFetchingApiModels = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching models: $e')),
+      );
+    }
+  }
+
   // Test connection to the model provider
   Future<void> _testConnection() async {
     setState(() {
@@ -96,6 +195,11 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
         provider: _selectedProvider,
         baseUrl: _baseUrlController.text,
         apiKey: _apiKeyController.text.isNotEmpty ? _apiKeyController.text : null,
+        additionalParams: {
+          'systemPrompt': _systemPromptController.text,
+          'temperature': double.tryParse(_temperatureController.text) ?? 0.7,
+          'apiUrl': _apiUrlController.text,
+        },
       );
       
       final success = await ModelService.testConnection(config);
@@ -143,6 +247,11 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
         provider: _selectedProvider,
         baseUrl: _baseUrlController.text,
         apiKey: _apiKeyController.text.isNotEmpty ? _apiKeyController.text : null,
+        additionalParams: {
+          'systemPrompt': _systemPromptController.text,
+          'temperature': double.tryParse(_temperatureController.text) ?? 0.7,
+          'apiUrl': _apiUrlController.text,
+        },
       );
       
       widget.onSave(config);
@@ -227,6 +336,7 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
                             // Set default URL based on provider
                             if (value == ModelProvider.ollama) {
                               _baseUrlController.text = ModelService.defaultOllamaUrl;
+                              _loadOllamaModels();
                             } else if (value == ModelProvider.openAI) {
                               _baseUrlController.text = 'https://api.openai.com/v1';
                             } else if (value == ModelProvider.anthropic) {
@@ -259,6 +369,116 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
                   },
                 ),
                 SizedBox(height: 16),
+                
+                // API URL for fetching models
+                if (_selectedProvider == ModelProvider.openAI)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'API URL for Models (Optional)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _apiUrlController,
+                              decoration: InputDecoration(
+                                labelText: 'API URL',
+                                hintText: 'https://api.example.com/v1/models',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _isFetchingApiModels ? null : _fetchModelsFromApi,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF8B5CF6),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            ),
+                            child: _isFetchingApiModels
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.refresh,
+                                    color: Colors.white,
+                                  ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      
+                      // API Models dropdown
+                      if (_apiModels.isNotEmpty)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Available API Models',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: EdgeInsets.symmetric(horizontal: 12),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: _apiModels.contains(_modelIdController.text) 
+                                      ? _modelIdController.text 
+                                      : null,
+                                  hint: Text('Select a model'),
+                                  items: _apiModels.map((model) {
+                                    return DropdownMenuItem<String>(
+                                      value: model,
+                                      child: Text(model),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _modelIdController.text = value;
+                                        if (_nameController.text.isEmpty) {
+                                          _nameController.text = value;
+                                        }
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 16),
+                          ],
+                        ),
+                    ],
+                  ),
                 
                 // Model ID field
                 if (_selectedProvider == ModelProvider.ollama && _availableModels.isNotEmpty)
@@ -355,6 +575,7 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
                       onPressed: _isTestingConnection ? null : _testConnection,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _connectionSuccess ? Colors.green : Color(0xFF8B5CF6),
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -403,6 +624,47 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
                     ],
                   ),
                 
+                // System Prompt field
+                TextFormField(
+                  controller: _systemPromptController,
+                  decoration: InputDecoration(
+                    labelText: 'System Prompt (Optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    hintText: 'You are a helpful assistant...',
+                  ),
+                  maxLines: 3,
+                ),
+                SizedBox(height: 16),
+                
+                // Temperature field
+                TextFormField(
+                  controller: _temperatureController,
+                  decoration: InputDecoration(
+                    labelText: 'Temperature',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    hintText: '0.7',
+                  ),
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a temperature value';
+                    }
+                    final temp = double.tryParse(value);
+                    if (temp == null) {
+                      return 'Please enter a valid number';
+                    }
+                    if (temp < 0 || temp > 2) {
+                      return 'Temperature should be between 0 and 2';
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: 16),
+                
                 // Loading models indicator
                 if (_isLoadingModels)
                   Center(
@@ -450,6 +712,7 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
                         style: ElevatedButton.styleFrom(
                           padding: EdgeInsets.symmetric(vertical: 12),
                           backgroundColor: Color(0xFF8B5CF6),
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -468,6 +731,7 @@ class _ModelConfigDialogState extends State<ModelConfigDialog> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
+                                  color: Colors.white,
                                 ),
                               ),
                       ),

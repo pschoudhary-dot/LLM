@@ -1,3 +1,5 @@
+import '../services/model_service.dart';
+
 class AIModel {
   final String id;
   final String description;
@@ -83,17 +85,54 @@ class ModelsRepository {
   }
 }
 
+class SearchResult {
+  final String title;
+  final String url;
+  final String snippet;
+  final DateTime? publishedDate;
+  
+  SearchResult({
+    required this.title,
+    required this.url,
+    required this.snippet,
+    this.publishedDate,
+  });
+  
+  // Add fromJson and toJson methods for serialization
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'url': url,
+      'snippet': snippet,
+      'publishedDate': publishedDate?.toIso8601String(),
+    };
+  }
+  
+  factory SearchResult.fromJson(Map<String, dynamic> json) {
+    return SearchResult(
+      title: json['title'],
+      url: json['url'],
+      snippet: json['snippet'],
+      publishedDate: json['publishedDate'] != null
+          ? DateTime.parse(json['publishedDate'])
+          : null,
+    );
+  }
+}
+
 class Message {
   final String content;
   final bool isUser;
   final DateTime timestamp;
   final bool isThinking;
+  final List<SearchResult>? sources;
 
   Message({
     required this.content,
     required this.isUser,
     required this.timestamp,
     this.isThinking = false,
+    this.sources,
   });
 
   // Add fromJson and toJson methods for serialization
@@ -103,6 +142,7 @@ class Message {
       'isUser': isUser,
       'timestamp': timestamp.toIso8601String(),
       'isThinking': isThinking,
+      'sources': sources?.map((s) => s.toJson()).toList(),
     };
   }
 
@@ -112,6 +152,56 @@ class Message {
       isUser: json['isUser'],
       timestamp: DateTime.parse(json['timestamp']),
       isThinking: json['isThinking'] ?? false,
+      sources: json['sources'] != null
+          ? (json['sources'] as List).map((s) => SearchResult.fromJson(s as Map<String, dynamic>)).toList()
+          : null,
+    );
+  }
+}
+
+class ModelConfig {
+  final String id;
+  final String name;
+  final ModelProvider provider;
+  final String baseUrl;
+  final String? apiKey;
+  final Map<String, dynamic>? additionalParams;
+  
+  ModelConfig({
+    required this.id,
+    required this.name,
+    required this.provider,
+    required this.baseUrl,
+    this.apiKey,
+    this.additionalParams,
+  });
+  
+  // Convert to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'provider': provider.toString().split('.').last,
+      'baseUrl': baseUrl,
+      'apiKey': apiKey,
+      'additionalParams': additionalParams,
+    };
+  }
+  
+  // Create from JSON
+  factory ModelConfig.fromJson(Map<String, dynamic> json) {
+    return ModelConfig(
+      id: json['id'],
+      name: json['name'],
+      provider: ModelProvider.values.firstWhere(
+        (e) => e.toString().split('.').last == json['provider'],
+        orElse: () => ModelProvider.ollama,
+      ),
+      baseUrl: json['baseUrl'],
+      apiKey: json['apiKey'],
+      additionalParams: json['additionalParams'] != null 
+          ? Map<String, dynamic>.from(json['additionalParams']) 
+          : null,
     );
   }
 }

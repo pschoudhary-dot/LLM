@@ -49,6 +49,11 @@ class ChatService {
     try {
       debugPrint('Connecting to Ollama at ${config.baseUrl}');
       
+      // Get additional parameters
+      final additionalParams = config.additionalParams ?? {};
+      final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
+      final temperature = additionalParams['temperature'] as double? ?? 0.7;
+      
       // First check if the model exists
       try {
         final modelResponse = await http.get(
@@ -90,6 +95,21 @@ class ChatService {
       
       // Try using the chat completion API
       try {
+        // Prepare messages with system prompt if provided
+        final messages = <Map<String, String>>[];
+        
+        if (systemPrompt.isNotEmpty) {
+          messages.add({
+            'role': 'system',
+            'content': systemPrompt,
+          });
+        }
+        
+        messages.add({
+          'role': 'user',
+          'content': userMessage,
+        });
+        
         final response = await http.post(
           Uri.parse('${config.baseUrl}/api/chat'),
           headers: {
@@ -97,13 +117,9 @@ class ChatService {
           },
           body: jsonEncode({
             'model': config.id,
-            'messages': [
-              {
-                'role': 'user',
-                'content': userMessage,
-              },
-            ],
+            'messages': messages,
             'stream': stream,
+            'temperature': temperature,
           }),
         );
         
@@ -119,13 +135,9 @@ class ChatService {
             },
             body: jsonEncode({
               'model': config.id,
-              'messages': [
-                {
-                  'role': 'user',
-                  'content': userMessage,
-                },
-              ],
+              'messages': messages,
               'stream': stream,
+              'temperature': temperature,
             }),
           );
           
@@ -143,7 +155,10 @@ class ChatService {
           },
           body: jsonEncode({
             'model': config.id,
-            'prompt': userMessage,
+            'prompt': systemPrompt.isNotEmpty 
+                ? '$systemPrompt\n\n$userMessage' 
+                : userMessage,
+            'temperature': temperature,
           }),
         );
         
@@ -172,10 +187,30 @@ class ChatService {
     try {
       debugPrint('Connecting to OpenAI compatible API at ${config.baseUrl}');
       
+      // Get additional parameters
+      final additionalParams = config.additionalParams ?? {};
+      final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
+      final temperature = additionalParams['temperature'] as double? ?? 0.7;
+      
       // Validate the API key
       if (config.apiKey == null || config.apiKey!.isEmpty) {
         return 'API key is required for OpenAI compatible API.';
       }
+      
+      // Prepare messages with system prompt if provided
+      final messages = <Map<String, String>>[];
+      
+      if (systemPrompt.isNotEmpty) {
+        messages.add({
+          'role': 'system',
+          'content': systemPrompt,
+        });
+      }
+      
+      messages.add({
+        'role': 'user',
+        'content': userMessage,
+      });
       
       final response = await http.post(
         Uri.parse('${config.baseUrl}/chat/completions'),
@@ -185,10 +220,9 @@ class ChatService {
         },
         body: jsonEncode({
           'model': config.id,
-          'messages': [
-            {'role': 'user', 'content': userMessage},
-          ],
+          'messages': messages,
           'stream': stream,
+          'temperature': temperature,
         }),
       );
       
@@ -214,9 +248,28 @@ class ChatService {
     try {
       debugPrint('Connecting to Anthropic API at ${config.baseUrl}');
       
+      // Get additional parameters
+      final additionalParams = config.additionalParams ?? {};
+      final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
+      final temperature = additionalParams['temperature'] as double? ?? 0.7;
+      
       // Validate the API key
       if (config.apiKey == null || config.apiKey!.isEmpty) {
         return 'API key is required for Anthropic API.';
+      }
+      
+      final Map<String, dynamic> requestBody = {
+        'model': config.id,
+        'messages': [
+          {'role': 'user', 'content': userMessage},
+        ],
+        'max_tokens': 1024,
+        'temperature': temperature,
+      };
+      
+      // Add system prompt if provided
+      if (systemPrompt.isNotEmpty) {
+        requestBody['system'] = systemPrompt;
       }
       
       final response = await http.post(
@@ -226,13 +279,7 @@ class ChatService {
           'Content-Type': 'application/json',
           'anthropic-version': '2023-06-01',
         },
-        body: jsonEncode({
-          'model': config.id,
-          'messages': [
-            {'role': 'user', 'content': userMessage},
-          ],
-          'max_tokens': 1024,
-        }),
+        body: jsonEncode(requestBody),
       );
       
       if (response.statusCode == 200) {
@@ -257,6 +304,11 @@ class ChatService {
     try {
       debugPrint('Connecting to LLM Studio at ${config.baseUrl}');
       
+      // Get additional parameters
+      final additionalParams = config.additionalParams ?? {};
+      final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
+      final temperature = additionalParams['temperature'] as double? ?? 0.7;
+      
       // Implement LLM Studio API call
       final response = await http.post(
         Uri.parse('${config.baseUrl}/api/generate'),
@@ -265,8 +317,11 @@ class ChatService {
         },
         body: jsonEncode({
           'model': config.id,
-          'prompt': userMessage,
+          'prompt': systemPrompt.isNotEmpty 
+              ? '$systemPrompt\n\n$userMessage' 
+              : userMessage,
           'max_tokens': 1024,
+          'temperature': temperature,
         }),
       );
       
