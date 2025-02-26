@@ -6,6 +6,9 @@ import 'package:clipboard/clipboard.dart';
 import 'models.dart';
 import 'tavily_service.dart';
 import 'chat_history_manager.dart'; // Import the new chat history manager
+import '../services/chat_service.dart';
+import '../services/model_service.dart';
+import 'package:animated_text_kit/animated_text_kit.dart';
 
 class ChatInterface extends StatefulWidget {
   @override
@@ -21,7 +24,8 @@ class _ChatInterfaceState extends State<ChatInterface> {
   final List<Message> _messages = [];
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
-  late String _selectedModel;
+  String? _selectedModelId;
+  ModelConfig? _selectedModelConfig;
   final String apiKey = 'ddc-m4qlvrgpt1W1E4ZXc4bvm5T5Z6CRFLeXRCx9AbRuQOcGpFFrX2';
   final String apiUrl = 'https://api.sree.shop/v1/chat/completions';
   final TavilyService _tavilyService = TavilyService();
@@ -29,53 +33,36 @@ class _ChatInterfaceState extends State<ChatInterface> {
   final ChatHistoryManager _chatHistoryManager = ChatHistoryManager();
 
   // Suggested messages (dynamic)
-  List<String> _suggestedMessages = [];
+  List<String> _suggestedMessages = [
+    "🤔 What's the meaning of life?",
+    "🌍 How can we protect the environment?",
+    "🤖 What are the latest AI trends?"
+  ];
 
   @override
   void initState() {
     super.initState();
-    _selectedModel = ModelsRepository.models.first.id;
+    _loadSelectedModel();
     _loadChatHistory();
-    _generateSuggestedQuestions(); // Generate dynamic questions on startup
   }
 
-  Future<void> _generateSuggestedQuestions() async {
+  Future<void> _loadSelectedModel() async {
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {
-          'Authorization': 'Bearer $apiKey',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'model': _selectedModel,
-          'messages': [
-            {
-              'role': 'user',
-              'content':
-                  'Generate 3 interesting and engaging questions with emojis for a chatbot conversation.',
-            }
-          ],
-          'temperature': 0.8,
-        }),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final aiResponse = data['choices'][0]['message']['content'];
+      final selectedId = await ModelService.getSelectedModel();
+      if (selectedId != null) {
+        final configs = await ModelService.getModelConfigs();
+        final config = configs.firstWhere(
+          (config) => config.id == selectedId,
+          orElse: () => throw Exception('Selected model not found'),
+        );
+        
         setState(() {
-          _suggestedMessages = aiResponse.split('\n').map((q) => q.trim()).toList();
+          _selectedModelId = selectedId;
+          _selectedModelConfig = config;
         });
-      } else {
-        throw Exception('Failed to generate suggested questions');
       }
     } catch (e) {
-      setState(() {
-        _suggestedMessages = [
-          "🤔 What's the meaning of life?",
-          "🌍 How can we protect the environment?",
-          "🤖 What are the latest AI trends?"
-        ];
-      });
+      print('Error loading selected model: $e');
     }
   }
 
@@ -89,21 +76,65 @@ class _ChatInterfaceState extends State<ChatInterface> {
 
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
+    
+    // Check if a model is selected
+    if (_selectedModelId == null || _selectedModelConfig == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select a model in the app bar first'),
+          action: SnackBarAction(
+            label: 'Settings',
+            onPressed: () {
+              Navigator.pushNamed(context, '/settings');
+            },
+          ),
+        ),
+      );
+      return;
+    }
+    
     final userMessage = _messageController.text;
     final newMessage = Message(
       content: userMessage,
       isUser: true,
       timestamp: DateTime.now(),
     );
+    
     setState(() {
       _messages.add(newMessage);
       _isLoading = true;
     });
+    
     _messageController.clear();
     _saveChatHistory();
+    
+    // Add a thinking message for Ollama models
+    Message? thinkingMessage;
+    if (_selectedModelConfig!.provider == ModelProvider.ollama) {
+      thinkingMessage = Message(
+        content: 'Thinking...',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isThinking: true,
+      );
+      
+      setState(() {
+        _messages.add(thinkingMessage!);
+      });
+      _scrollToBottom();
+    }
+    
     try {
       final aiResponse = await _getAIResponse(userMessage);
       String cleanedResponse = _cleanUpResponse(aiResponse);
+      
+      // Remove the thinking message if it exists
+      if (thinkingMessage != null) {
+        setState(() {
+          _messages.remove(thinkingMessage);
+        });
+      }
+      
       if (_isOnline) {
         final tavilyResults = await _performWebSearch(userMessage);
         setState(() {
@@ -123,9 +154,16 @@ class _ChatInterfaceState extends State<ChatInterface> {
         });
       }
     } catch (e) {
+      // Remove the thinking message if it exists
+      if (thinkingMessage != null) {
+        setState(() {
+          _messages.remove(thinkingMessage);
+        });
+      }
+      
       setState(() {
         _messages.add(Message(
-          content: 'Error: Something went wrong',
+          content: 'Error: $e',
           isUser: false,
           timestamp: DateTime.now(),
         ));
@@ -148,25 +186,12 @@ class _ChatInterfaceState extends State<ChatInterface> {
   }
 
   Future<String> _getAIResponse(String userMessage) async {
-    final response = await http.post(
-      Uri.parse(apiUrl),
-      headers: {
-        'Authorization': 'Bearer $apiKey',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'model': _selectedModel,
-        'messages': [
-          {'role': 'user', 'content': userMessage},
-        ],
-        'temperature': 0.7,
-      }),
-    );
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['choices'][0]['message']['content'];
-    } else {
-      throw Exception('Failed to get AI response');
+    try {
+      // Use the ChatService to get a response from the selected model
+      return await ChatService.getModelResponse(userMessage);
+    } catch (e) {
+      print('Error getting AI response: $e');
+      throw Exception('Failed to get AI response: $e');
     }
   }
 
@@ -193,119 +218,6 @@ class _ChatInterfaceState extends State<ChatInterface> {
         );
       }
     });
-  }
-
-  Widget _buildModelSelector() {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Theme(
-          data: ThemeData(canvasColor: Colors.white),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _selectedModel,
-              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF8B5CF6)),
-              isExpanded: true,
-              items: ModelsRepository.models.map((model) {
-                return DropdownMenuItem<String>(
-                  value: model.id,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text(
-                      model.id,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black87, fontSize: 14),
-                    ),
-                  ),
-                );
-              }).toList(),
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    _selectedModel = newValue;
-                  });
-                }
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWebIcon() {
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _isOnline = !_isOnline;
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-        child: Column(
-          children: [
-            Icon(
-              Icons.public,
-              color: _isOnline ? Colors.green : Colors.grey,
-              size: 30,
-            ),
-            Text(
-              _isOnline ? 'Online' : 'Offline',
-              style: TextStyle(
-                color: _isOnline ? Colors.green : Colors.grey,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSuggestedMessages() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            "Start a conversation with one of these:",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _suggestedMessages.map((message) {
-              return ElevatedButton(
-                onPressed: () {
-                  _messageController.text = message;
-                  _sendMessage();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B5CF6),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                child: Text(
-                  message,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -577,21 +489,23 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: MarkdownBody(
-                    data: message.content,
-                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                      p: TextStyle(
-                        color: message.isUser ? Colors.white : Colors.black87,
-                        fontSize: 16,
-                      ),
-                      code: TextStyle(
-                        backgroundColor: Colors.grey[200],
-                        color: Colors.black87,
-                        fontFamily: 'monospace',
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
+                  child: message.isThinking
+                      ? _buildThinkingIndicator()
+                      : MarkdownBody(
+                          data: message.content,
+                          styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                            p: TextStyle(
+                              color: message.isUser ? Colors.white : Colors.black87,
+                              fontSize: 16,
+                            ),
+                            code: TextStyle(
+                              backgroundColor: Colors.grey[200],
+                              color: Colors.black87,
+                              fontFamily: 'monospace',
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -604,7 +518,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                         fontSize: 12,
                       ),
                     ),
-                    if (!message.isUser) ...[
+                    if (!message.isUser && !message.isThinking) ...[
                       const SizedBox(width: 8),
                       _buildCopyButton(message.content),
                     ],
@@ -679,6 +593,28 @@ class _ChatInterfaceState extends State<ChatInterface> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildThinkingIndicator() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedTextKit(
+          animatedTexts: [
+            TypewriterAnimatedText(
+              'Thinking...',
+              textStyle: TextStyle(
+                color: Colors.black87,
+                fontSize: 16,
+              ),
+              speed: Duration(milliseconds: 100),
+            ),
+          ],
+          repeatForever: true,
+          displayFullTextOnTap: false,
+        ),
+      ],
     );
   }
 }

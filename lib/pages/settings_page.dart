@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'settings/profile_settings.dart';
 import '../component/model_input_dialog.dart';
+import '../component/model_config_dialog.dart';
+import 'model_settings_page.dart';
+import 'api_keys_page.dart';
+import '../services/model_service.dart';
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
 
@@ -54,20 +59,33 @@ class _SettingsPageState extends State<SettingsPage> {
             iconColor: Colors.purple,
             title: 'Model Settings',
             subtitle: 'Configure AI models and parameters',
-            showActionButtons: true,  // Add this line
+            showActionButtons: true,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ModelSettingsPage()),
+              );
+            },
+            onAddPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => ModelConfigDialog(
+                  onSave: (config) async {
+                    await ModelService.saveModelConfig(config);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Model configuration saved')),
+                    );
+                  },
+                ),
+              );
+            },
           ),
           _buildSettingsItem(
             icon: Icons.search,
             iconColor: Colors.green,
             title: 'Search Configuration',
             subtitle: 'Customize search behavior and sources',
-            showActionButtons: true,  // Add this line
-          ),
-          _buildSettingsItem(
-            icon: Icons.search,
-            iconColor: Colors.green,
-            title: 'Search Configuration',
-            subtitle: 'Customize search behavior and sources',
+            showActionButtons: true,
           ),
           
           SizedBox(height: 32),
@@ -98,6 +116,12 @@ class _SettingsPageState extends State<SettingsPage> {
             iconColor: Colors.orange,
             title: 'API Keys',
             subtitle: 'Manage API keys and authentication',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ApiKeysPage()),
+              );
+            },
           ),
           
           SizedBox(height: 32),
@@ -153,7 +177,9 @@ class _SettingsPageState extends State<SettingsPage> {
     required Color iconColor,
     required String title,
     required String subtitle,
-    bool showActionButtons = false,  // Add this parameter
+    bool showActionButtons = false,
+    VoidCallback? onTap,
+    VoidCallback? onAddPressed,
   }) {
     return Container(
       margin: EdgeInsets.only(bottom: 8),
@@ -190,7 +216,7 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             IconButton(
               icon: Icon(Icons.add, color: Color(0xFF8B5CF6)),
-              onPressed: () {
+              onPressed: onAddPressed ?? () {
                 showDialog(
                   context: context,
                   builder: (context) => PermissionDialog(
@@ -214,10 +240,8 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ],
-        ) : null,
-        onTap: () {
-          // Handle item tap
-        },
+        ) : Icon(Icons.chevron_right, color: Colors.grey[400]),
+        onTap: onTap,
       ),
     );
   }

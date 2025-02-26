@@ -87,11 +87,13 @@ class Message {
   final String content;
   final bool isUser;
   final DateTime timestamp;
+  final bool isThinking;
 
   Message({
     required this.content,
     required this.isUser,
     required this.timestamp,
+    this.isThinking = false,
   });
 
   // Add fromJson and toJson methods for serialization
@@ -100,6 +102,7 @@ class Message {
       'content': content,
       'isUser': isUser,
       'timestamp': timestamp.toIso8601String(),
+      'isThinking': isThinking,
     };
   }
 
@@ -108,6 +111,7 @@ class Message {
       content: json['content'],
       isUser: json['isUser'],
       timestamp: DateTime.parse(json['timestamp']),
+      isThinking: json['isThinking'] ?? false,
     );
   }
 }
