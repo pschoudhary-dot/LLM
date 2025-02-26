@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import 'settings/profile_settings.dart';
-import 'settings/model_settings.dart';
-import 'settings/search_settings.dart';
-import '../component/input_config_dialog.dart';  // Add this line
+import '../component/model_input_dialog.dart';
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
 

@@ -13,6 +13,10 @@ class ChatInterface extends StatefulWidget {
 }
 
 class _ChatInterfaceState extends State<ChatInterface> {
+  // Add these new state variables at the top of the class
+  bool _showAttachmentOptions = false;
+  double _inputHeight = 56.0;
+  final double _maxInputHeight = 120.0;  // Maximum height for input area
   final TextEditingController _messageController = TextEditingController();
   final List<Message> _messages = [];
   bool _isLoading = false;
@@ -363,7 +367,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
         Expanded(
           child: Center(
             child: Image.asset(
-              'assets/images/logo.png', // Make sure to add this image
+              'assets/icons/icon.jpg', // Make sure to add this image
               width: 48,
               height: 48,
               color: Colors.grey[300],
@@ -437,34 +441,65 @@ class _ChatInterfaceState extends State<ChatInterface> {
         children: [
           Expanded(
             child: Container(
-              height: 56, // Increased height
+              constraints: BoxConstraints(
+                maxHeight: _maxInputHeight,
+                minHeight: 56,
+              ),
               decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(28),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  IconButton(
-                    icon: Icon(Icons.camera_alt_outlined),
-                    onPressed: () {},
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.image_outlined),
-                    onPressed: () {},
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.folder_outlined),
-                    onPressed: () {},
-                  ),
+                  // Attachment section
+                  if (_showAttachmentOptions) ...[
+                    IconButton(
+                      icon: Icon(Icons.camera_alt_outlined),
+                      onPressed: () {
+                        // Handle camera
+                        setState(() => _showAttachmentOptions = false);
+                      },
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.image_outlined),
+                      onPressed: () {
+                        // Handle image
+                        setState(() => _showAttachmentOptions = false);
+                      },
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.folder_outlined),
+                      onPressed: () {
+                        // Handle file
+                        setState(() => _showAttachmentOptions = false);
+                      },
+                    ),
+                  ] else
+                    IconButton(
+                      icon: Icon(Icons.attach_file),
+                      onPressed: () {
+                        setState(() => _showAttachmentOptions = true);
+                      },
+                    ),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
+                      maxLines: null,
                       decoration: InputDecoration(
                         hintText: 'Message',
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
                       onSubmitted: (value) => _sendMessage(),
+                      onChanged: (value) {
+                        // Calculate new height based on content
+                        final numLines = '\n'.allMatches(value).length + 1;
+                        final newHeight = (numLines * 20.0).clamp(56.0, _maxInputHeight);
+                        if (newHeight != _inputHeight) {
+                          setState(() => _inputHeight = newHeight);
+                        }
+                      },
                     ),
                   ),
                   IconButton(
