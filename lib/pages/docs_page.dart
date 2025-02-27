@@ -2,15 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class Docs extends StatelessWidget {
-  const Docs({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return DocsPage();
-  }
-}
-
 class DocsPage extends StatefulWidget {
   const DocsPage({Key? key}) : super(key: key);
 
@@ -79,14 +70,25 @@ If F-Droid is not accessible:
 - Create directory: `mkdir <name>`
 - Remove directory: `rm -r <directory>`
 
-### Tips & Best Practices
+### Text Editing
+- Nano editor: `pkg install nano`
+- Vim editor: `pkg install vim`
+- Edit file: `nano <filename>` or `vim <filename>`
+
+## Tips & Best Practices
 
 1. **Performance**
    - Keep packages updated
    - Remove unused packages
    - Clear package cache: `pkg clean`
 
-2. **Storage**
+2. **Usability**
+   - Enable extra keys row in settings
+   - Use a monospace font
+   - Create aliases for common commands
+   - Use tab completion
+
+3. **Storage**
    - Regular cleanup of downloaded files
    - Monitor storage usage: `df -h`
    - Use `termux-setup-storage` for external storage
@@ -109,13 +111,23 @@ If F-Droid is not accessible:
    - Check app permissions in Android settings
    - Run `termux-setup-storage`
    - Restart Termux
+
+3. **Performance Issues**
+   - Clear package cache
+   - Remove unused packages
+   - Check storage space
+
+## Additional Resources
+- [Official Termux Wiki](https://wiki.termux.com)
+- [Termux GitHub](https://github.com/termux)
+- [Termux Community Forum](https://termux.com/community)
 ''';
 
   final String ollamaDocs = '''
 # Ollama Setup Guide
 
 ## What is Ollama?
-Ollama is an open-source tool that allows you to run large language models locally on your Android device through Termux, without requiring cloud services.
+Ollama is an open-source tool that allows you to run large language models locally. On Android, it can be run through Termux, enabling you to use AI models directly on your device without cloud dependencies.
 
 ## Prerequisites
 - Termux installed and configured
@@ -125,7 +137,8 @@ Ollama is an open-source tool that allows you to run large language models local
 
 ## Installation Steps
 
-### 1. Install Dependencies
+### 1. Prepare Environment
+Ensure you have the required packages:
 ```bash
 pkg upgrade
 pkg install git cmake golang
@@ -150,32 +163,61 @@ go build .
 ./ollama serve &
 ```
 
-### 4. Run a Model
-```bash
-# Example with Phi model
-./ollama run phi
-```
+## Using Ollama
 
-## Basic Commands
-
-### Model Management
+### Basic Commands
 - Start server: `./ollama serve &`
 - Run model: `./ollama run <model-name>`
 - List models: `./ollama list`
 - Remove model: `./ollama rm <model-name>`
 - Pull model: `./ollama pull <model-name>`
 
-### Recommended Models for Mobile
-1. **Small Models (Best Performance)**
-   - phi-2
+### Model Management
+
+#### Recommended Models for Mobile
+1. **Small Models (Best for phones)**
    - deepseek-r1:1.5b
+   - phi-2
    - neural-chat:3b
    - mistral:7b
 
-2. **Model Size Guidelines**
+2. **Model Size Categories**
    - 1.5B-3B: Good performance on phones
-   - 7B-13B: May be slower but usable
-   - >30B: Not recommended for mobile
+   - 7B-13B: May be slow but usable
+   - >30B: Not recommended for mobile use
+
+### Performance Optimization
+
+1. **Device Preparation**
+   - Close background apps
+   - Ensure sufficient free RAM
+   - Connect to power source
+   - Use in a cool environment
+
+2. **Model Selection**
+   - Start with smaller models
+   - Test performance before heavy use
+   - Monitor resource usage
+
+3. **Usage Tips**
+   - Run server in background
+   - Use offline when possible
+   - Monitor temperature
+   - Keep sessions reasonable length
+
+## Installation Options
+
+### Option 1: Basic Installation
+```bash
+./ollama serve &
+./ollama run <model-name>
+```
+
+### Option 2: System-wide Installation
+```bash
+# Move to bin for system-wide access
+cp ollama/ollama /data/data/com.termux/files/usr/bin/
+```
 
 ## Cleanup and Maintenance
 
@@ -186,25 +228,15 @@ chmod -R 700 ~/go
 rm -r ~/go
 ```
 
-### System-wide Installation
+### Model Management
 ```bash
-# Move to bin for system-wide access
-cp ollama/ollama /data/data/com.termux/files/usr/bin/
+# Remove unused models
+ollama list
+ollama rm <model-name>
+
+# Update models
+ollama pull <model-name>
 ```
-
-## Performance Tips
-
-1. **Device Preparation**
-   - Close background apps
-   - Ensure sufficient free RAM
-   - Connect to power source
-   - Use in a cool environment
-
-2. **Best Practices**
-   - Start with smaller models
-   - Monitor device temperature
-   - Keep sessions reasonable length
-   - Regular cleanup of unused models
 
 ## Troubleshooting
 
@@ -213,6 +245,7 @@ cp ollama/ollama /data/data/com.termux/files/usr/bin/
 1. **Build Failures**
    - Check Go installation
    - Update all packages
+   - Clear Go cache
    - Ensure sufficient storage
 
 2. **Performance Issues**
@@ -220,6 +253,22 @@ cp ollama/ollama /data/data/com.termux/files/usr/bin/
    - Check RAM usage
    - Monitor CPU temperature
    - Close background apps
+
+3. **Connection Issues**
+   - Check if server is running
+   - Verify localhost access
+   - Check port availability
+
+### Best Practices
+- Regular cleanup of unused models
+- Monitor device temperature
+- Keep models updated
+- Regular maintenance of Termux environment
+
+## Additional Resources
+- [Ollama GitHub](https://github.com/ollama/ollama)
+- [Ollama Models Library](https://ollama.com/library)
+- [Ollama Documentation](https://ollama.ai/docs)
 ''';
 
   @override
@@ -328,4 +377,4 @@ cp ollama/ollama /data/data/com.termux/files/usr/bin/
       },
     );
   }
-}
+} 

@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:ollama_dart/ollama_dart.dart';
 import 'model_service.dart';
+import 'pocket_llm_service.dart';
 
 class ChatService {
   // Get response from the selected model
@@ -22,6 +23,9 @@ class ChatService {
       
       // Call the appropriate provider based on the model configuration
       switch (modelConfig.provider) {
+        case ModelProvider.pocketLLM:
+          return await _getPocketLLMResponse(modelConfig, userMessage, stream);
+        
         case ModelProvider.ollama:
           return await _getOllamaResponse(modelConfig, userMessage, stream);
         
@@ -31,8 +35,14 @@ class ChatService {
         case ModelProvider.anthropic:
           return await _getAnthropicResponse(modelConfig, userMessage, stream);
         
-        case ModelProvider.llmStudio:
-          return await _getLLMStudioResponse(modelConfig, userMessage, stream);
+        case ModelProvider.mistral:
+          return await _getMistralResponse(modelConfig, userMessage, stream);
+        
+        case ModelProvider.deepseek:
+          return await _getDeepseekResponse(modelConfig, userMessage, stream);
+        
+        case ModelProvider.lmStudio:
+          return await _getLMStudioResponse(modelConfig, userMessage, stream);
       }
     } catch (e) {
       debugPrint('Error getting model response: $e');
@@ -93,7 +103,7 @@ class ChatService {
         return 'Error connecting to Ollama server at ${config.baseUrl}. Please make sure Ollama is running.';
       }
       
-      // Try using the chat completion API
+      // Try using the chat completion API with streaming
       try {
         // Prepare messages with system prompt if provided
         final messages = <Map<String, String>>[];
@@ -109,41 +119,102 @@ class ChatService {
           'role': 'user',
           'content': userMessage,
         });
-        
-        final response = await http.post(
+
+        final client = http.Client();
+        final request = http.Request(
+          'POST',
           Uri.parse('${config.baseUrl}/api/chat'),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'model': config.id,
-            'messages': messages,
-            'stream': stream,
-            'temperature': temperature,
-          }),
         );
         
+        request.headers['Content-Type'] = 'application/json';
+        request.body = jsonEncode({
+          'model': config.id,
+          'messages': messages,
+          'stream': true,
+          'temperature': temperature,
+        });
+
+        final response = await client.send(request);
+        
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          return data['message']['content'] ?? '';
+          final completer = Completer<String>();
+          final buffer = StringBuffer();
+          
+          response.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .listen(
+              (line) {
+                if (line.trim().isNotEmpty) {
+                  try {
+                    final data = jsonDecode(line);
+                    final content = data['message']?['content'] ?? '';
+                    if (content.isNotEmpty) {
+                      buffer.write(content);
+                    }
+                  } catch (e) {
+                    debugPrint('Error parsing streaming response: $e');
+                  }
+                }
+              },
+              onDone: () {
+                completer.complete(buffer.toString());
+              },
+              onError: (e) {
+                completer.completeError('Error streaming response: $e');
+              },
+              cancelOnError: true,
+            );
+          
+          return await completer.future;
         } else {
           // Try the v1 API endpoint
-          final v1Response = await http.post(
+          final v1Request = http.Request(
+            'POST',
             Uri.parse('${config.baseUrl}/v1/chat/completions'),
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'model': config.id,
-              'messages': messages,
-              'stream': stream,
-              'temperature': temperature,
-            }),
           );
           
+          v1Request.headers['Content-Type'] = 'application/json';
+          v1Request.body = jsonEncode({
+            'model': config.id,
+            'messages': messages,
+            'stream': true,
+            'temperature': temperature,
+          });
+
+          final v1Response = await client.send(v1Request);
+          
           if (v1Response.statusCode == 200) {
-            final data = jsonDecode(v1Response.body);
-            return data['choices'][0]['message']['content'] ?? '';
+            final completer = Completer<String>();
+            final buffer = StringBuffer();
+            
+            v1Response.stream
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())
+              .listen(
+                (line) {
+                  if (line.trim().isNotEmpty) {
+                    try {
+                      final data = jsonDecode(line);
+                      final content = data['choices']?[0]?['delta']?['content'] ?? '';
+                      if (content.isNotEmpty) {
+                        buffer.write(content);
+                      }
+                    } catch (e) {
+                      debugPrint('Error parsing streaming response: $e');
+                    }
+                  }
+                },
+                onDone: () {
+                  completer.complete(buffer.toString());
+                },
+                onError: (e) {
+                  completer.completeError('Error streaming response: $e');
+                },
+                cancelOnError: true,
+              );
+            
+            return await completer.future;
           }
         }
         
@@ -296,7 +367,7 @@ class ChatService {
   }
   
   // Get response from LLM Studio
-  static Future<String> _getLLMStudioResponse(
+  static Future<String> _getLMStudioResponse(
     ModelConfig config, 
     String userMessage,
     bool stream,
@@ -335,6 +406,165 @@ class ChatService {
     } catch (e) {
       debugPrint('Error getting LLM Studio response: $e');
       return 'Error connecting to LLM Studio: $e';
+    }
+  }
+
+  // Get response from PocketLLM
+  static Future<String> _getPocketLLMResponse(
+    ModelConfig config, 
+    String userMessage,
+    bool stream,
+  ) async {
+    try {
+      debugPrint('Connecting to PocketLLM at ${config.baseUrl}');
+      
+      // Get additional parameters
+      final additionalParams = config.additionalParams ?? {};
+      final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
+      final temperature = additionalParams['temperature'] as double? ?? 0.7;
+      
+      // Prepare messages with system prompt if provided
+      final messages = <Map<String, String>>[];
+      
+      if (systemPrompt.isNotEmpty) {
+        messages.add({
+          'role': 'system',
+          'content': systemPrompt,
+        });
+      }
+      
+      messages.add({
+        'role': 'user',
+        'content': userMessage,
+      });
+      
+      final response = await PocketLLMService.getChatCompletion(
+        model: config.id,
+        messages: messages,
+        temperature: temperature,
+      );
+      
+      if (response['choices'] != null && response['choices'].isNotEmpty) {
+        final choice = response['choices'][0];
+        if (choice['message'] != null) {
+          return choice['message']['content'] ?? '';
+        }
+      }
+      
+      return 'No response from PocketLLM';
+    } catch (e) {
+      debugPrint('Error getting PocketLLM response: $e');
+      return 'Error connecting to PocketLLM: $e';
+    }
+  }
+
+  // Get response from Mistral
+  static Future<String> _getMistralResponse(
+    ModelConfig config, 
+    String userMessage,
+    bool stream,
+  ) async {
+    try {
+      debugPrint('Connecting to Mistral at ${config.baseUrl}');
+      
+      // Get additional parameters
+      final additionalParams = config.additionalParams ?? {};
+      final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
+      final temperature = additionalParams['temperature'] as double? ?? 0.7;
+      
+      // Prepare messages with system prompt if provided
+      final messages = <Map<String, String>>[];
+      
+      if (systemPrompt.isNotEmpty) {
+        messages.add({
+          'role': 'system',
+          'content': systemPrompt,
+        });
+      }
+      
+      messages.add({
+        'role': 'user',
+        'content': userMessage,
+      });
+      
+      final response = await http.post(
+        Uri.parse('${config.baseUrl}/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer ${config.apiKey}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'model': config.id,
+          'messages': messages,
+          'temperature': temperature,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['choices'][0]['message']['content'];
+      } else {
+        debugPrint('Mistral API error: ${response.statusCode} ${response.body}');
+        return 'Failed to get response: ${response.statusCode} - ${response.body}';
+      }
+    } catch (e) {
+      debugPrint('Error getting Mistral response: $e');
+      return 'Error connecting to Mistral: $e';
+    }
+  }
+
+  // Get response from DeepSeek
+  static Future<String> _getDeepseekResponse(
+    ModelConfig config, 
+    String userMessage,
+    bool stream,
+  ) async {
+    try {
+      debugPrint('Connecting to DeepSeek at ${config.baseUrl}');
+      
+      // Get additional parameters
+      final additionalParams = config.additionalParams ?? {};
+      final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
+      final temperature = additionalParams['temperature'] as double? ?? 0.7;
+      
+      // Prepare messages with system prompt if provided
+      final messages = <Map<String, String>>[];
+      
+      if (systemPrompt.isNotEmpty) {
+        messages.add({
+          'role': 'system',
+          'content': systemPrompt,
+        });
+      }
+      
+      messages.add({
+        'role': 'user',
+        'content': userMessage,
+      });
+      
+      final response = await http.post(
+        Uri.parse('${config.baseUrl}/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer ${config.apiKey}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'model': config.id,
+          'messages': messages,
+          'temperature': temperature,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['choices'][0]['message']['content'];
+      } else {
+        debugPrint('DeepSeek API error: ${response.statusCode} ${response.body}');
+        return 'Failed to get response: ${response.statusCode} - ${response.body}';
+      }
+    } catch (e) {
+      debugPrint('Error getting DeepSeek response: $e');
+      return 'Error connecting to DeepSeek: $e';
     }
   }
 } 

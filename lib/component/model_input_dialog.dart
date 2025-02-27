@@ -32,7 +32,7 @@ class PermissionDialog extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
@@ -40,14 +40,14 @@ class PermissionDialog extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, color: Colors.grey),
+                  icon: const Icon(Icons.close, color: Colors.grey),
                   onPressed: onCancel,
                   padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(),
+                  constraints: const BoxConstraints(),
                 ),
               ],
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Text(
               description,
               style: TextStyle(

@@ -121,10 +121,11 @@ class SearchResult {
 }
 
 class Message {
-  final String content;
+  String content;
   final bool isUser;
   final DateTime timestamp;
-  final bool isThinking;
+  bool isThinking;
+  final bool isStreaming;
   final List<SearchResult>? sources;
 
   Message({
@@ -132,6 +133,7 @@ class Message {
     required this.isUser,
     required this.timestamp,
     this.isThinking = false,
+    this.isStreaming = false,
     this.sources,
   });
 
@@ -142,6 +144,7 @@ class Message {
       'isUser': isUser,
       'timestamp': timestamp.toIso8601String(),
       'isThinking': isThinking,
+      'isStreaming': isStreaming,
       'sources': sources?.map((s) => s.toJson()).toList(),
     };
   }
@@ -152,6 +155,7 @@ class Message {
       isUser: json['isUser'],
       timestamp: DateTime.parse(json['timestamp']),
       isThinking: json['isThinking'] ?? false,
+      isStreaming: json['isStreaming'] ?? false,
       sources: json['sources'] != null
           ? (json['sources'] as List).map((s) => SearchResult.fromJson(s as Map<String, dynamic>)).toList()
           : null,
@@ -204,4 +208,16 @@ class ModelConfig {
           : null,
     );
   }
+}
+
+class Source {
+  final String title;
+  final String url;
+  final String snippet;
+
+  Source({
+    required this.title,
+    required this.url,
+    required this.snippet,
+  });
 }

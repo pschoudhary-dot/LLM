@@ -3,27 +3,94 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ollama_dart/ollama_dart.dart';
+import 'pocket_llm_service.dart';
 
 // Enum for model providers
 enum ModelProvider {
+  pocketLLM,
   ollama,
   openAI,
   anthropic,
-  llmStudio,
+  mistral,
+  deepseek,
+  lmStudio,
 }
 
 // Extension to get display name for providers
 extension ModelProviderExtension on ModelProvider {
   String get displayName {
     switch (this) {
+      case ModelProvider.pocketLLM:
+        return 'PocketLLM';
       case ModelProvider.ollama:
         return 'Ollama';
       case ModelProvider.openAI:
         return 'OpenAI Compatible';
       case ModelProvider.anthropic:
         return 'Anthropic';
-      case ModelProvider.llmStudio:
-        return 'LLM Studio';
+      case ModelProvider.mistral:
+        return 'Mistral AI';
+      case ModelProvider.deepseek:
+        return 'DeepSeek';
+      case ModelProvider.lmStudio:
+        return 'LM Studio';
+    }
+  }
+
+  String get defaultBaseUrl {
+    switch (this) {
+      case ModelProvider.pocketLLM:
+        return 'https://api.sree.shop/v1';
+      case ModelProvider.ollama:
+        return 'http://localhost:11434';
+      case ModelProvider.openAI:
+        return 'https://api.openai.com/v1';
+      case ModelProvider.anthropic:
+        return 'https://api.anthropic.com';
+      case ModelProvider.mistral:
+        return 'https://api.mistral.ai/v1';
+      case ModelProvider.deepseek:
+        return 'https://api.deepseek.com/v1';
+      case ModelProvider.lmStudio:
+        return 'http://localhost:1234/v1';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case ModelProvider.pocketLLM:
+        return Icons.smart_toy;
+      case ModelProvider.ollama:
+        return Icons.terminal;
+      case ModelProvider.openAI:
+        return Icons.auto_awesome;
+      case ModelProvider.anthropic:
+        return Icons.psychology;
+      case ModelProvider.mistral:
+        return Icons.cloud;
+      case ModelProvider.deepseek:
+        return Icons.search;
+      case ModelProvider.lmStudio:
+        return Icons.science;
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case ModelProvider.pocketLLM:
+        return Color(0xFF8B5CF6);
+      case ModelProvider.ollama:
+        return Colors.orange;
+      case ModelProvider.openAI:
+        return Colors.green;
+      case ModelProvider.anthropic:
+        return Colors.purple;
+      case ModelProvider.mistral:
+        return Colors.blue;
+      case ModelProvider.deepseek:
+        return Colors.teal;
+      case ModelProvider.lmStudio:
+        return Colors.indigo;
     }
   }
 }
@@ -182,6 +249,9 @@ class ModelService {
   static Future<bool> testConnection(ModelConfig config) async {
     try {
       switch (config.provider) {
+        case ModelProvider.pocketLLM:
+          return await PocketLLMService.testConnection(config);
+        
         case ModelProvider.ollama:
           // Use direct HTTP request instead of the client
           final response = await http.get(
@@ -221,17 +291,72 @@ class ModelService {
             headers: {
               'x-api-key': config.apiKey ?? '',
               'Content-Type': 'application/json',
+              'anthropic-version': '2023-06-01',
             },
           );
           return response.statusCode == 200;
         
-        case ModelProvider.llmStudio:
-          // Implement LLM Studio connection test
-          return true;
+        case ModelProvider.mistral:
+          final response = await http.get(
+            Uri.parse('${config.baseUrl}/models'),
+            headers: {
+              'Authorization': 'Bearer ${config.apiKey}',
+              'Content-Type': 'application/json',
+            },
+          );
+          return response.statusCode == 200;
+        
+        case ModelProvider.deepseek:
+          final response = await http.get(
+            Uri.parse('${config.baseUrl}/models'),
+            headers: {
+              'Authorization': 'Bearer ${config.apiKey}',
+              'Content-Type': 'application/json',
+            },
+          );
+          return response.statusCode == 200;
+        
+        case ModelProvider.lmStudio:
+          // Implement LM Studio connection test
+          final response = await http.get(
+            Uri.parse('${config.baseUrl}/models'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          );
+          return response.statusCode == 200;
       }
     } catch (e) {
       debugPrint('Connection test failed: $e');
       return false;
     }
+  }
+
+  // Initialize default configurations
+  static Future<void> initializeDefaultConfigs() async {
+    final configs = await getModelConfigs();
+    
+    // Only add default configs if no configs exist
+    if (configs.isEmpty) {
+      // Add PocketLLM default config
+      final pocketLLMConfig = PocketLLMService.createDefaultConfig();
+      await saveModelConfig(pocketLLMConfig);
+      await setSelectedModel(pocketLLMConfig.id);
+    }
+  }
+
+  // Get default base URL for provider
+  static String getDefaultBaseUrl(ModelProvider provider) {
+    return provider.defaultBaseUrl;
+  }
+
+  // Get provider icon
+  static IconData getProviderIcon(ModelProvider provider) {
+    return provider.icon;
+  }
+
+  // Get provider color
+  static Color getProviderColor(ModelProvider provider) {
+    return provider.color;
   }
 } 

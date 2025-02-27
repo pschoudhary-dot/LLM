@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'settings/profile_settings.dart';
-import '../component/model_input_dialog.dart';
 import '../component/model_config_dialog.dart';
 import 'model_settings_page.dart';
 import 'api_keys_page.dart';
 import '../services/model_service.dart';
+import 'search_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -96,13 +96,9 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: 'Customize search behavior and sources',
             showActionButtons: true,
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Search settings coming soon')),
-              );
-            },
-            onAddPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Search configuration coming soon')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SearchConfigPage()),
               );
             },
           ),

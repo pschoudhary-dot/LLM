@@ -131,9 +131,21 @@ class ModelListItem extends StatelessWidget {
         iconData = Icons.psychology;
         iconColor = Colors.purple;
         break;
-      case ModelProvider.llmStudio:
+      case ModelProvider.lmStudio:
         iconData = Icons.science;
         iconColor = Colors.blue;
+        break;
+      case ModelProvider.pocketLLM:
+        iconData = Icons.smart_toy;
+        iconColor = Color(0xFF8B5CF6);
+        break;
+      case ModelProvider.mistral:
+        iconData = Icons.cloud;
+        iconColor = Colors.blue;
+        break;
+      case ModelProvider.deepseek:
+        iconData = Icons.search;
+        iconColor = Colors.teal;
         break;
     }
 

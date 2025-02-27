@@ -5,7 +5,7 @@ class ChatHistory extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Chat History'),
+        title: const Text('Chat History'),
         backgroundColor: Colors.deepPurple,
       ),
       body: ListView.builder(

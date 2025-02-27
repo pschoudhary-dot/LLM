@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:clipboard/clipboard.dart';
 import 'models.dart';
@@ -108,65 +106,38 @@ class _ChatInterfaceState extends State<ChatInterface> {
     _messageController.clear();
     _saveChatHistory();
     
-    // Add a thinking message for Ollama models
-    Message? thinkingMessage;
-    if (_selectedModelConfig!.provider == service.ModelProvider.ollama) {
-      thinkingMessage = Message(
-        content: 'Thinking...',
-        isUser: false,
-        timestamp: DateTime.now(),
-        isThinking: true,
-      );
-      
-      setState(() {
-        _messages.add(thinkingMessage!);
-      });
-      _scrollToBottom();
-    }
+    // Create a placeholder message for the AI response
+    final aiMessage = Message(
+      content: '',
+      isUser: false,
+      timestamp: DateTime.now(),
+      isThinking: true,
+    );
+    
+    setState(() {
+      _messages.add(aiMessage);
+    });
+    _scrollToBottom();
     
     try {
       final aiResponse = await _getAIResponse(userMessage);
       String cleanedResponse = _cleanUpResponse(aiResponse);
       
-      // Remove the thinking message if it exists
-      if (thinkingMessage != null) {
-        setState(() {
-          _messages.remove(thinkingMessage);
-        });
-      }
+      setState(() {
+        aiMessage.content = cleanedResponse;
+        aiMessage.isThinking = false;
+      });
       
       if (_isOnline) {
         final tavilyResults = await _performWebSearch(userMessage);
         setState(() {
-          _messages.add(Message(
-            content: '$cleanedResponse\n\n**Web Search Results:**\n$tavilyResults',
-            isUser: false,
-            timestamp: DateTime.now(),
-          ));
-        });
-      } else {
-        setState(() {
-          _messages.add(Message(
-            content: cleanedResponse,
-            isUser: false,
-            timestamp: DateTime.now(),
-          ));
+          aiMessage.content = '$cleanedResponse\n\n**Web Search Results:**\n$tavilyResults';
         });
       }
     } catch (e) {
-      // Remove the thinking message if it exists
-      if (thinkingMessage != null) {
-        setState(() {
-          _messages.remove(thinkingMessage);
-        });
-      }
-      
       setState(() {
-        _messages.add(Message(
-          content: 'Error: $e',
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
+        aiMessage.content = 'Error: $e';
+        aiMessage.isThinking = false;
       });
     } finally {
       setState(() {
@@ -232,7 +203,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 : ListView.builder(
                     controller: _scrollController,
                     itemCount: _messages.length,
-                    padding: EdgeInsets.only(bottom: 20),
+                    padding: const EdgeInsets.only(bottom: 20),
                     itemBuilder: (context, index) {
                       return _buildMessageBubble(_messages[index]);
                     },
@@ -254,12 +225,12 @@ class _ChatInterfaceState extends State<ChatInterface> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Color(0xFFEEF2FF),
+                  color: const Color(0xFFEEF2FF),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
@@ -295,7 +266,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 "illustration of my pet",
                 Icons.brush_outlined,
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               _buildSuggestionCard(
                 "What can PocketLLM do",
                 "and how to get started",
@@ -347,375 +318,442 @@ class _ChatInterfaceState extends State<ChatInterface> {
   }
   Widget _buildInputArea() {
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
-      margin: EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              constraints: BoxConstraints(
-                maxHeight: _maxInputHeight,
-                minHeight: 56,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Attachment section
-                  if (_showAttachmentOptions) ...[
-                    IconButton(
-                      icon: Icon(Icons.camera_alt_outlined),
-                      onPressed: () {
-                        // Handle camera
-                        setState(() => _showAttachmentOptions = false);
-                      },
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.image_outlined),
-                      onPressed: () {
-                        // Handle image
-                        setState(() => _showAttachmentOptions = false);
-                      },
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.folder_outlined),
-                      onPressed: () {
-                        // Handle file
-                        setState(() => _showAttachmentOptions = false);
-                      },
-                    ),
-                  ] else
-                    IconButton(
-                      icon: Icon(Icons.attach_file),
-                      onPressed: () {
-                        setState(() => _showAttachmentOptions = true);
-                      },
-                    ),
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      maxLines: null,
-                      decoration: InputDecoration(
-                        hintText: 'Message',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                      onSubmitted: (value) => _sendMessage(),
-                      onChanged: (value) {
-                        // Calculate new height based on content
-                        final numLines = '\n'.allMatches(value).length + 1;
-                        final newHeight = (numLines * 20.0).clamp(56.0, _maxInputHeight);
-                        if (newHeight != _inputHeight) {
-                          setState(() => _inputHeight = newHeight);
-                        }
-                      },
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.mic),
-                    onPressed: () {},
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.public,
-                      color: _isOnline ? Colors.green : Colors.grey,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isOnline = !_isOnline;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SizedBox(width: 8),
-          FloatingActionButton(
-            mini: true,
-            backgroundColor: Color(0xFF8B5CF6),
-            onPressed: _sendMessage,
-            child: Icon(
-              _isLoading ? Icons.auto_awesome : Icons.send,
-              color: Colors.white,
-            ),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, -5),
           ),
         ],
       ),
-    );
-  }
-  Widget _buildMessageBubble(Message message) {
-    // Extract thinking content if present
-    String displayContent = message.content;
-    String? thinkingContent;
-    
-    if (!message.isUser && !message.isThinking) {
-      final thinkRegex = RegExp(r'<think>(.*?)</think>', dotAll: true);
-      final match = thinkRegex.firstMatch(displayContent);
-      
-      if (match != null) {
-        thinkingContent = match.group(1)?.trim();
-        displayContent = displayContent.replaceAll(thinkRegex, '').trim();
-      }
-    }
-    
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          if (!message.isUser)
-            const Padding(
-              padding: EdgeInsets.only(right: 8.0),
-              child: CircleAvatar(
-                backgroundColor: Color(0xFF8B5CF6),
-                radius: 16,
-                child: Icon(Icons.smart_toy, color: Colors.white, size: 18),
-              ),
-            ),
-          Flexible(
-            child: Column(
-              crossAxisAlignment:
-                  message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                if (!message.isUser)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 4.0),
-                    child: Text(
-                      'PocketLLM',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                Container(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75,
-                  ),
-                  decoration: BoxDecoration(
-                    color: message.isUser ? const Color(0xFF8B5CF6) : const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: message.isThinking
-                      ? _buildThinkingIndicator()
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            MarkdownBody(
-                              data: displayContent,
-                              styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                                p: TextStyle(
-                                  color: message.isUser ? Colors.white : Colors.black87,
-                                  fontSize: 16,
-                                ),
-                                code: TextStyle(
-                                  backgroundColor: Colors.grey[200],
-                                  color: Colors.black87,
-                                  fontFamily: 'monospace',
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                            
-                            // Thinking content expandable section
-                            if (thinkingContent != null) ...[
-                              SizedBox(height: 12),
-                              Divider(color: Colors.grey[300]),
-                              ExpansionTile(
-                                title: Text(
-                                  'Thinking',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF8B5CF6),
-                                  ),
-                                ),
-                                collapsedIconColor: Color(0xFF8B5CF6),
-                                iconColor: Color(0xFF8B5CF6),
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: Text(
-                                      thinkingContent,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[700],
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                            
-                            // Sources expandable section
-                            if (message.sources != null && message.sources!.isNotEmpty) ...[
-                              SizedBox(height: 12),
-                              Divider(color: Colors.grey[300]),
-                              ExpansionTile(
-                                title: Text(
-                                  'Sources (${message.sources!.length})',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.green[700],
-                                  ),
-                                ),
-                                collapsedIconColor: Colors.green[700],
-                                iconColor: Colors.green[700],
-                                children: message.sources!.map((source) => ListTile(
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  title: Text(
-                                    source.title,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      SizedBox(height: 4),
-                                      Text(
-                                        source.snippet,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        source.url,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.blue,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )).toList(),
-                              ),
-                            ],
-                          ],
-                        ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            _buildAttachmentButton(),
+            SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.grey[300]!),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: Row(
                   children: [
-                    Text(
-                      '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}',
-                      style: TextStyle(
-                        color: Colors.grey[500],
-                        fontSize: 12,
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        decoration: InputDecoration(
+                          hintText: 'Message',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        onSubmitted: (value) => _sendMessage(),
                       ),
                     ),
-                    if (!message.isUser && !message.isThinking) ...[
-                      const SizedBox(width: 8),
-                      _buildCopyButton(message.content),
+                    if (_isLoading)
+                      Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
+                          ),
+                        ),
+                      )
+                    else ...[
+                      IconButton(
+                        icon: Icon(Icons.mic, color: Colors.grey[600]),
+                        onPressed: () {
+                          // Handle voice input
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.send, color: Color(0xFF8B5CF6)),
+                        onPressed: () => _sendMessage(),
+                      ),
                     ],
                   ],
                 ),
-              ],
-            ),
-          ),
-          if (message.isUser)
-            const Padding(
-              padding: EdgeInsets.only(left: 8.0),
-              child: CircleAvatar(
-                backgroundColor: Color(0xFF4CAF50),
-                radius: 16,
-                child: Icon(Icons.person, color: Colors.white, size: 18),
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildCopyButton(String content) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () {
-          FlutterClipboard.copy(content).then((_) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: const [
-                    Icon(Icons.check_circle, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text('Copied to clipboard!'),
-                  ],
-                ),
-                backgroundColor: const Color(0xFF8B5CF6),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            );
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFF8B5CF6)),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(
-                Icons.copy,
-                size: 16,
-                color: Color(0xFF8B5CF6),
-              ),
-              SizedBox(width: 4),
-              Text(
-                'Copy',
-                style: TextStyle(
-                  color: Color(0xFF8B5CF6),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+  Widget _buildAttachmentButton() {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.attach_file, color: Colors.grey[700]),
+      offset: Offset(0, -200), // Show menu above the button
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'camera',
+          child: ListTile(
+            leading: Icon(Icons.camera_alt_outlined, color: Color(0xFF8B5CF6)),
+            title: Text('Camera'),
           ),
         ),
+        PopupMenuItem(
+          value: 'gallery',
+          child: ListTile(
+            leading: Icon(Icons.image_outlined, color: Color(0xFF8B5CF6)),
+            title: Text('Gallery'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'files',
+          child: ListTile(
+            leading: Icon(Icons.folder_outlined, color: Color(0xFF8B5CF6)),
+            title: Text('Files'),
+          ),
+        ),
+      ],
+      onSelected: (value) async {
+        switch (value) {
+          case 'camera':
+            // Handle camera
+            break;
+          case 'gallery':
+            // Handle gallery
+            break;
+          case 'files':
+            // Handle files
+            break;
+        }
+      },
+    );
+  }
+
+  void _showMessageOptions(BuildContext context, Message message) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildMessageOption(
+              icon: Icons.copy,
+              label: 'Copy',
+              onTap: () {
+                FlutterClipboard.copy(message.content);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Copied to clipboard')),
+                );
+              },
+            ),
+            if (message.isUser) ...[
+              _buildMessageOption(
+                icon: Icons.edit,
+                label: 'Edit',
+                onTap: () {
+                  Navigator.pop(context);
+                  _messageController.text = message.content;
+                  // Remove the old message
+                  setState(() {
+                    _messages.remove(message);
+                  });
+                },
+              ),
+            ] else ...[
+              _buildMessageOption(
+                icon: Icons.refresh,
+                label: 'Regenerate',
+                onTap: () {
+                  Navigator.pop(context);
+                  // Handle regeneration
+                },
+              ),
+              _buildMessageOption(
+                icon: Icons.thumb_down,
+                label: 'Bad Response',
+                onTap: () {
+                  Navigator.pop(context);
+                  // Handle feedback
+                },
+              ),
+              _buildMessageOption(
+                icon: Icons.volume_up,
+                label: 'Read Aloud',
+                onTap: () {
+                  Navigator.pop(context);
+                  // Handle text-to-speech
+                },
+              ),
+            ],
+            _buildMessageOption(
+              icon: Icons.auto_awesome,
+              label: 'Model',
+              trailing: Text(
+                _selectedModelConfig?.name ?? 'Select Model',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showModelSelectionSheet();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Widget? trailing,
+  }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      trailing: trailing,
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildMessageBubble(Message message) {
+    final timestamp = message.timestamp;
+    final formattedTime = "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}";
+    
+    return GestureDetector(
+      onLongPress: () => _showMessageOptions(context, message),
+      child: Column(
+        crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+              children: [
+                if (!message.isUser)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 8.0),
+                    child: CircleAvatar(
+                      backgroundColor: Color(0xFF8B5CF6),
+                      radius: 16,
+                      child: Icon(Icons.smart_toy, color: Colors.white, size: 18),
+                    ),
+                  ),
+                Flexible(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: message.isUser ? Color(0xFF8B5CF6) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: message.isUser ? null : Border.all(color: Colors.grey[200]!),
+                    ),
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (message.isThinking)
+                          _buildThinkingIndicator()
+                        else
+                          Text(
+                            message.content,
+                            style: TextStyle(
+                              color: message.isUser ? Colors.white : Colors.black87,
+                              fontSize: 16,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (message.isUser)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 8.0),
+                    child: CircleAvatar(
+                      backgroundColor: Colors.green,
+                      radius: 16,
+                      child: Icon(Icons.person, color: Colors.white, size: 18),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(
+              left: message.isUser ? 0 : 48,
+              right: message.isUser ? 48 : 0,
+              bottom: 8,
+              top: 0,
+            ),
+            child: Text(
+              formattedTime,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildThinkingIndicator() {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        AnimatedTextKit(
-          animatedTexts: [
-            TypewriterAnimatedText(
-              'Thinking...',
-              textStyle: TextStyle(
-                color: Colors.black87,
-                fontSize: 16,
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: Stack(
+            children: [
+              Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
+                  ),
+                ),
               ),
-              speed: Duration(milliseconds: 100),
-            ),
-          ],
-          repeatForever: true,
-          displayFullTextOnTap: false,
+              Center(
+                child: Icon(
+                  Icons.auto_awesome,
+                  size: 12,
+                  color: Color(0xFF8B5CF6),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: 8),
+        Text(
+          'Thinking...',
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: 16,
+          ),
         ),
       ],
+    );
+  }
+
+  Future<void> _showModelSelectionSheet() async {
+    final configs = await service.ModelService.getModelConfigs();
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Select Model',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: configs.length,
+                itemBuilder: (context, index) {
+                  final config = configs[index];
+                  final isSelected = config.id == _selectedModelId;
+                  
+                  return InkWell(
+                    onTap: () async {
+                      await service.ModelService.setSelectedModel(config.id);
+                      setState(() {
+                        _selectedModelId = config.id;
+                        _selectedModelConfig = config;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? Color(0xFFF3F4F6) : Colors.transparent,
+                        border: Border(
+                          bottom: BorderSide(color: Colors.grey[200]!),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Color(0xFF8B5CF6).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              _getProviderIcon(),
+                              color: Color(0xFF8B5CF6),
+                              size: 20,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  config.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                Text(
+                                  config.provider.toString().split('.').last,
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            Icon(Icons.check_circle, color: Color(0xFF8B5CF6)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            SizedBox(height: 16),
+          ],
+        ),
+      ),
     );
   }
 
@@ -730,7 +768,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
         return Icons.auto_awesome;
       case service.ModelProvider.anthropic:
         return Icons.psychology;
-      case service.ModelProvider.llmStudio:
+      case service.ModelProvider.lmStudio:
         return Icons.science;
       default:
         return Icons.psychology;

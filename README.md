@@ -15,16 +15,75 @@ PocketLLM is a sophisticated Flutter-based chat application that harnesses the p
   <img src="assets/mockups/model_library.jpg" alt="Model Library" width="250"/>
 </div>
 
-## ✨ Features
+## ✨ Core Features
 
-- 🤖 Interactive chat interface with AI-powered responses
-- 🔐 Secure authentication system powered by Supabase
-- 📁 Advanced file handling and image picking capabilities
-- ✍️ Rich text formatting with Markdown support
-- ⚙️ Customizable settings and configurations
-- 🌐 Cross-platform support (Android, iOS, Web)
-- 🎨 Modern and intuitive user interface
-- 🔄 Real-time message synchronization
+### 🤖 AI Model Support
+- Multi-model support (Ollama, OpenAI, Anthropic, LM Studio)
+- Local-first architecture for data privacy
+- Custom model configuration
+- Easy model switching
+- Real-time model status monitoring
+- API key management for different providers
+
+### 💬 Chat Interface
+- Real-time AI conversations with message streaming
+- Markdown rendering for formatted responses
+- One-click message copying
+- Persistent chat history
+- Smart typing indicators
+- File attachments (images, documents)
+- Voice input capabilities
+- Context-aware suggested prompts
+- Code syntax highlighting
+
+### 🌐 Web Integration
+- Optional web search via Tavily API
+- Toggle between online/offline modes
+- Web search results in AI responses
+- Smart context incorporation
+
+### ⚙️ System Features
+- Comprehensive device information
+- Real-time memory monitoring
+- Storage usage tracking
+- Termux integration support
+- Performance metrics dashboard
+- System health monitoring
+
+### 🔐 Authentication & Security
+- Email/password authentication
+- Secure account management
+- Google Sign-in support (planned)
+- Session management
+- Local data encryption
+- Secure API key storage
+- Private chat history
+
+### 🎨 User Interface
+- Modern, clean design
+- Dark/Light mode support
+- Responsive layout
+- Custom app bar with model selector
+- Intuitive sidebar navigation
+- Progress indicators
+- Smooth animations
+- Cross-platform compatibility
+
+### 💾 Data Management
+- Local chat history storage
+- Secure API key management
+- Model configuration persistence
+- User preferences storage
+- Efficient data handling
+
+### 🛠️ Developer Features
+- Open source codebase
+- Comprehensive documentation
+- Custom model integration support
+- Extensible architecture
+- API configuration options
+- Error handling system
+- Network status monitoring
 
 ## 🛠️ Tech Stack
 

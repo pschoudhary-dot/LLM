@@ -1,0 +1,91 @@
+Here's a detailed breakdown of this Flutter application called "PocketLLM" and its features:
+
+Core Functionality
+Private AI Chat Interface with multiple model support
+Local-first architecture ensuring data privacy
+Support for various AI models including Ollama, OpenAI, Anthropic, and LM Studio
+Key Features:
+A. Model Management:
+
+Multiple AI model support with easy switching
+Custom model configuration
+API key management for different providers
+Model status monitoring
+B. Chat Interface:
+
+Real-time chat with AI models
+Message streaming support
+Markdown rendering for formatted responses
+Copy message functionality
+Chat history preservation
+Typing indicators
+File attachments support (images, documents)
+Voice input support
+Suggested messages/prompts
+C. Web Integration:
+
+Optional web search integration via Tavily API
+Ability to toggle between online/offline modes
+Web search results incorporation into AI responses
+D. System Configuration:
+
+Detailed device information display
+System memory monitoring
+Storage usage tracking
+Termux integration checking
+Performance metrics
+E. Authentication:
+
+Email/password authentication
+Account creation and management
+Google Sign-in support (planned)
+Session management
+F. User Interface:
+
+Clean, modern design
+Dark mode support
+Responsive layout
+Custom app bar with model selection
+Sidebar navigation
+Progress indicators and loading states
+Technical Features:
+A. Data Management:
+
+Local storage for chat history
+API key secure storage
+Model configuration persistence
+User preferences storage
+B. Performance:
+
+Memory usage optimization
+Efficient message handling
+Background processing support
+Responsive UI with smooth animations
+C. Security:
+
+Secure API key handling
+Local data encryption
+Private chat history
+Secure authentication
+Navigation & Structure:
+Main chat interface
+Settings page
+System configuration
+Model library
+Documentation section
+About page
+Chat history view
+Additional Features:
+Error handling and recovery
+Network status monitoring
+File handling capabilities
+Cross-platform support
+Extensible architecture for future features
+Developer Features:
+Source code access
+Documentation
+Custom model integration support
+API configuration options
+This app essentially provides a privacy-focused, feature-rich interface for interacting with various AI language models while maintaining local control over data and providing flexibility in model selection and configuration. It's designed to be both user-friendly for regular users and customizable for advanced users who want to work with their own models or configurations.
+
+The application emphasizes security, privacy, and user control while providing advanced features like web search integration and file handling, making it a comprehensive solution for AI interaction on mobile devices.

@@ -112,7 +112,7 @@ class _SidebarState extends State<Sidebar> {
                         MaterialPageRoute(builder: (context) => SettingsPage()))),
                 _buildMenuItem(Icons.description_outlined, 'Documentation',
                     onTap: () => Navigator.push(
-                        context, MaterialPageRoute(builder: (context) => Docs()))),
+                        context, MaterialPageRoute(builder: (context) => const Docs()))),
                 _buildMenuItem(Icons.computer_outlined, 'System Config',
                     onTap: () => Navigator.push(context,
                         MaterialPageRoute(builder: (context) => ConfigPage(appName: 'PocketLLM')))),

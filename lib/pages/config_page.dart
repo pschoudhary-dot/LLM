@@ -33,15 +33,17 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _loadStorageInfo() async {
     try {
+      // Get RAM information
       final totalRam = SysInfo.getTotalPhysicalMemory();
       final freeRam = SysInfo.getFreePhysicalMemory();
       final usedRam = totalRam - freeRam;
       final ramPercentage = ((usedRam / totalRam) * 100).toStringAsFixed(0);
       
+      // Get storage information
       final directory = Directory('/storage/emulated/0');
-      final stat = await directory.statSync();
       final df = await Process.run('df', [directory.path]);
       final lines = df.stdout.toString().split('\n');
+      
       if (lines.length > 1) {
         final values = lines[1].split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
         final totalBytes = int.parse(values[1]) * 1024;
@@ -52,7 +54,7 @@ class _ConfigPageState extends State<ConfigPage> {
         setState(() {
           storageInfo = {
             'System Memory': '${(usedRam / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB of ${(totalRam / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB ($ramPercentage%)',
-            'Local Storage': '81.0 GB of 107.9 GB (75%)',
+            'Internal Storage': '${(usedBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB of ${(totalBytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB ($storagePercentage%)',
           };
         });
       }
@@ -60,7 +62,8 @@ class _ConfigPageState extends State<ConfigPage> {
       print("Error loading storage info: $e");
       setState(() {
         storageInfo = {
-          'Error': 'Failed to load storage information',
+          'System Memory': 'Error loading memory information',
+          'Internal Storage': 'Error loading storage information',
         };
       });
     }
@@ -211,28 +214,41 @@ class _ConfigPageState extends State<ConfigPage> {
         children: [
           Padding(
             padding: EdgeInsets.all(16),
-            child: Text(
-              'Storage Status',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            child: Row(
+              children: [
+                Icon(Icons.storage, color: Color(0xFF8B5CF6)),
+                SizedBox(width: 12),
+                Text(
+                  'Storage Status',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
           Divider(height: 1),
-          _buildStorageItem(
-            'Internal Storage',
-            '81.0 GB of 107.9 GB (75%)',
-            0.75,
-          ),
-          _buildStorageItem(
-            'SD Card',
-            '48.2 GB / 512 GB',
-            0.09,
-          ),
+          ...storageInfo.entries.map((entry) => _buildStorageItem(
+            entry.key,
+            entry.value,
+            _getStoragePercentage(entry.value),
+          )).toList(),
         ],
       ),
     );
+  }
+
+  double _getStoragePercentage(String value) {
+    try {
+      final percentageMatch = RegExp(r'\((\d+)%\)').firstMatch(value);
+      if (percentageMatch != null) {
+        return int.parse(percentageMatch.group(1)!) / 100;
+      }
+    } catch (e) {
+      print("Error parsing storage percentage: $e");
+    }
+    return 0.0;
   }
 
   Widget _buildStorageItem(String label, String value, double percentage) {
@@ -246,6 +262,7 @@ class _ConfigPageState extends State<ConfigPage> {
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 16,
+              fontWeight: FontWeight.w500,
             ),
           ),
           SizedBox(height: 12),

@@ -247,10 +247,19 @@ class _CustomAppBarState extends State<CustomAppBar> {
         iconData = Icons.psychology;
         iconColor = Colors.purple;
         break;
-      case ModelProvider.llmStudio:
+      case ModelProvider.lmStudio:
         iconData = Icons.science;
         iconColor = Colors.blue;
         break;
+      case ModelProvider.pocketLLM:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case ModelProvider.mistral:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case ModelProvider.deepseek:
+        // TODO: Handle this case.
+        throw UnimplementedError();
     }
 
     return Container(
