@@ -3,7 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:clipboard/clipboard.dart';
 import 'models.dart';
 import 'tavily_service.dart';
-import 'chat_history_manager.dart'; // Import the new chat history manager
+import 'chat_history_manager.dart';
 import '../services/chat_service.dart';
 import '../services/model_service.dart' as service;
 import 'package:animated_text_kit/animated_text_kit.dart';

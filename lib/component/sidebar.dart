@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../pages/library_page.dart';
 import '../pages/config_page.dart';
 import '../pages/settings_page.dart';
-import '../component/appbar/docs.dart';
+// import '../component/appbar/docs.dart';
+import '../pages/docs_page.dart';
 import '../component/appbar/about.dart';
 import '../component/appbar/chat_history.dart';
 
@@ -112,7 +113,7 @@ class _SidebarState extends State<Sidebar> {
                         MaterialPageRoute(builder: (context) => SettingsPage()))),
                 _buildMenuItem(Icons.description_outlined, 'Documentation',
                     onTap: () => Navigator.push(
-                        context, MaterialPageRoute(builder: (context) => const Docs()))),
+                        context, MaterialPageRoute(builder: (context) => const DocsPage()))),
                 _buildMenuItem(Icons.computer_outlined, 'System Config',
                     onTap: () => Navigator.push(context,
                         MaterialPageRoute(builder: (context) => ConfigPage(appName: 'PocketLLM')))),
