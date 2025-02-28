@@ -7,6 +7,10 @@ import 'chat_history_manager.dart';
 import '../services/chat_service.dart';
 import '../services/model_service.dart' as service;
 import 'package:animated_text_kit/animated_text_kit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'dart:async';
 
 class ChatInterface extends StatefulWidget {
   @override
@@ -29,6 +33,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
   final TavilyService _tavilyService = TavilyService();
   bool _isOnline = false;
   final ChatHistoryManager _chatHistoryManager = ChatHistoryManager();
+  bool _isTyping = false;
 
   // Suggested messages (dynamic)
   List<String> _suggestedMessages = [
@@ -72,9 +77,10 @@ class _ChatInterfaceState extends State<ChatInterface> {
     _scrollToBottom();
   }
 
-  Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) return;
-    
+  void _sendMessage() async {
+    final message = _messageController.text.trim();
+    if (message.isEmpty) return;
+
     // Check if a model is selected
     if (_selectedModelId == null || _selectedModelConfig == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,61 +96,154 @@ class _ChatInterfaceState extends State<ChatInterface> {
       );
       return;
     }
-    
-    final userMessage = _messageController.text;
-    final newMessage = Message(
-      content: userMessage,
+
+    // Add user message
+    final userMessage = Message(
+      content: message,
       isUser: true,
       timestamp: DateTime.now(),
     );
-    
-    setState(() {
-      _messages.add(newMessage);
-      _isLoading = true;
-    });
-    
-    _messageController.clear();
-    _saveChatHistory();
-    
-    // Create a placeholder message for the AI response
+
+    // Create a placeholder for AI response
     final aiMessage = Message(
       content: '',
       isUser: false,
-      timestamp: DateTime.now(),
       isThinking: true,
+      timestamp: DateTime.now(),
     );
-    
+
     setState(() {
+      _messages.add(userMessage);
       _messages.add(aiMessage);
+      _messageController.clear();
+      _isTyping = false;
+      _isLoading = true;
     });
+
     _scrollToBottom();
-    
+    _saveChatHistory();
+
     try {
-      final aiResponse = await _getAIResponse(userMessage);
-      String cleanedResponse = _cleanUpResponse(aiResponse);
+      // Create a StreamController to handle the streaming response
+      final streamController = StreamController<String>();
       
-      setState(() {
-        aiMessage.content = cleanedResponse;
-        aiMessage.isThinking = false;
+      // Start a stream to receive the response
+      ChatService.getModelResponse(message, stream: true, 
+        onToken: (token) {
+          streamController.add(token);
+        }
+      ).then((fullResponse) {
+        // Complete the stream when the full response is received
+        streamController.close();
+      }).catchError((error) {
+        streamController.addError(error);
+        streamController.close();
       });
       
-      if (_isOnline) {
-        final tavilyResults = await _performWebSearch(userMessage);
-        setState(() {
-          aiMessage.content = '$cleanedResponse\n\n**Web Search Results:**\n$tavilyResults';
-        });
-      }
+      // Listen to the stream and update the AI message
+      String accumulatedResponse = '';
+      streamController.stream.listen(
+        (token) {
+          accumulatedResponse += token;
+          setState(() {
+            final index = _messages.indexOf(aiMessage);
+            if (index != -1) {
+              _messages[index] = Message(
+                content: accumulatedResponse,
+                isUser: false,
+                isThinking: false,
+                isStreaming: true,
+                timestamp: aiMessage.timestamp,
+              );
+            }
+          });
+          _scrollToBottom();
+        },
+        onDone: () {
+          setState(() {
+            _isLoading = false;
+            final index = _messages.indexOf(aiMessage);
+            if (index != -1) {
+              _messages[index] = Message(
+                content: accumulatedResponse,
+                isUser: false,
+                isThinking: false,
+                isStreaming: false,
+                timestamp: aiMessage.timestamp,
+              );
+            }
+          });
+          _saveChatHistory();
+          
+          // If online, perform web search
+          if (_isOnline) {
+            _performWebSearch(message).then((searchResults) {
+              if (searchResults.containsKey('results')) {
+                String formattedResults = "\n\n**Web Search Results:**\n\n";
+                
+                final results = searchResults['results'] as List;
+                for (var result in results) {
+                  final title = result['title'] ?? 'No title';
+                  final url = result['url'] ?? '';
+                  final content = result['content'] ?? 'No content';
+                  
+                  formattedResults += "**$title**\n";
+                  formattedResults += "   $url\n";
+                  formattedResults += "   ${content.substring(0, min(150, content.length as int))}...\n\n";
+                }
+                
+                if (searchResults.containsKey('answer')) {
+                  formattedResults += "**Summary:** ${searchResults['answer']}\n\n";
+                }
+                
+                setState(() {
+                  final index = _messages.indexOf(aiMessage);
+                  if (index != -1) {
+                    _messages[index] = Message(
+                      content: accumulatedResponse + formattedResults,
+                      isUser: false,
+                      isThinking: false,
+                      timestamp: aiMessage.timestamp,
+                    );
+                  }
+                });
+                _saveChatHistory();
+              }
+            }).catchError((e) {
+              print('Error performing web search: $e');
+            });
+          }
+        },
+        onError: (error) {
+          setState(() {
+            _isLoading = false;
+            final index = _messages.indexOf(aiMessage);
+            if (index != -1) {
+              _messages[index] = Message(
+                content: "Error: $error",
+                isUser: false,
+                isThinking: false,
+                timestamp: aiMessage.timestamp,
+              );
+            }
+          });
+          _saveChatHistory();
+        },
+      );
     } catch (e) {
       setState(() {
-        aiMessage.content = 'Error: $e';
-        aiMessage.isThinking = false;
-      });
-    } finally {
-      setState(() {
         _isLoading = false;
+        final index = _messages.indexOf(aiMessage);
+        if (index != -1) {
+          _messages[index] = Message(
+            content: "Error: $e",
+            isUser: false,
+            isThinking: false,
+            timestamp: aiMessage.timestamp,
+          );
+        }
       });
       _saveChatHistory();
-      _scrollToBottom();
     }
   }
 
@@ -166,16 +265,30 @@ class _ChatInterfaceState extends State<ChatInterface> {
     }
   }
 
-  Future<String> _performWebSearch(String query) async {
+  // Perform web search using the TavilyService
+  Future<Map<String, dynamic>> _performWebSearch(String query) async {
     try {
-      final result = await _tavilyService.search(query);
-      final answer = result['answer'] ?? 'No answer found.';
-      final results = (result['results'] as List)
-          .map((item) => '- ${item['title']} (${item['url']})')
-          .join('\n');
-      return '$answer\n\n$results';
+      // Get the active search configuration from shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      final searchConfigJson = prefs.getString('activeSearchConfig');
+      
+      if (searchConfigJson == null) {
+        throw Exception('No active search configuration found. Please configure search settings first.');
+      }
+      
+      final searchConfig = json.decode(searchConfigJson);
+      final searchProvider = searchConfig['provider'] ?? 'tavily';
+      
+      if (searchProvider == 'tavily') {
+        // Use TavilyService for search
+        final results = await _tavilyService.search(query);
+        return results;
+      } else {
+        throw Exception('Unsupported search provider: $searchProvider');
+      }
     } catch (e) {
-      return 'Error fetching web search results: $e';
+      print('Search error: $e');
+      throw e;
     }
   }
 
@@ -286,7 +399,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
       },
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.grey[50],
           borderRadius: BorderRadius.circular(12),
@@ -303,7 +416,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 color: Colors.black87,
               ),
             ),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(
               subtitle,
               style: TextStyle(
@@ -318,68 +431,166 @@ class _ChatInterfaceState extends State<ChatInterface> {
   }
   Widget _buildInputArea() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, -5),
+        boxShadow: [BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 5,
+          offset: const Offset(0, -2),
+        )],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_showAttachmentOptions)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              margin: const EdgeInsets.only(bottom: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                )],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildAttachmentOption(
+                    Icons.image, 
+                    'Image',
+                    onTap: () {
+                      setState(() => _showAttachmentOptions = false);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildAttachmentOption(
+                    Icons.file_copy, 
+                    'Document',
+                    onTap: () {
+                      setState(() => _showAttachmentOptions = false);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildAttachmentOption(
+                    Icons.mic, 
+                    'Audio',
+                    onTap: () {
+                      setState(() => _showAttachmentOptions = false);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.attach_file,
+                      color: _showAttachmentOptions ? const Color(0xFF8B5CF6) : Colors.grey[600],
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _showAttachmentOptions = !_showAttachmentOptions;
+                      });
+                    },
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      maxLines: null,
+                      onChanged: (text) {
+                        setState(() {}); // Trigger rebuild to update send button color
+                      },
+                      decoration: const InputDecoration(
+                        hintText: 'Type a message...',
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.public,
+                      color: _isOnline ? Colors.green : Colors.grey[600],
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isOnline = !_isOnline;
+                      });
+                      final snackBar = SnackBar(
+                        content: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _isOnline ? Icons.check_circle : Icons.info,
+                                color: _isOnline ? Colors.green : Colors.grey,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                _isOnline ? 'Web search enabled' : 'Web search disabled',
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ],
+                          ),
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: Colors.white,
+                        elevation: 4,
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send),
+                    color: _messageController.text.trim().isNotEmpty
+                        ? const Color(0xFF8B5CF6)
+                        : Colors.grey[400],
+                    onPressed: _messageController.text.trim().isNotEmpty ? _sendMessage : null,
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
-      child: SafeArea(
+    );
+  }
+
+  Widget _buildAttachmentOption(IconData icon, String label, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(8),
+        ),
         child: Row(
           children: [
-            _buildAttachmentButton(),
-            SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        decoration: InputDecoration(
-                          hintText: 'Message',
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                        ),
-                        onSubmitted: (value) => _sendMessage(),
-                      ),
-                    ),
-                    if (_isLoading)
-                      Padding(
-                        padding: EdgeInsets.only(right: 8),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
-                          ),
-                        ),
-                      )
-                    else ...[
-                      IconButton(
-                        icon: Icon(Icons.mic, color: Colors.grey[600]),
-                        onPressed: () {
-                          // Handle voice input
-                        },
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.send, color: Color(0xFF8B5CF6)),
-                        onPressed: () => _sendMessage(),
-                      ),
-                    ],
-                  ],
-                ),
+            Icon(icon, size: 24, color: const Color(0xFF8B5CF6)),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -388,47 +599,361 @@ class _ChatInterfaceState extends State<ChatInterface> {
     );
   }
 
-  Widget _buildAttachmentButton() {
-    return PopupMenuButton<String>(
-      icon: Icon(Icons.attach_file, color: Colors.grey[700]),
-      offset: Offset(0, -200), // Show menu above the button
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          value: 'camera',
-          child: ListTile(
-            leading: Icon(Icons.camera_alt_outlined, color: Color(0xFF8B5CF6)),
-            title: Text('Camera'),
+  Widget _buildQuickAction(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: Colors.grey[700],
+              size: 20,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(Message message) {
+    final formattedTime = '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}';
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 16.0, left: 16.0, right: 16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              if (!message.isUser)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0, top: 4.0),
+                  child: CircleAvatar(
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    radius: 16,
+                    child: const Icon(Icons.smart_toy, color: Colors.white, size: 18),
+                  ),
+                ),
+              Flexible(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: message.isUser 
+                        ? const Color(0xFF8B5CF6) 
+                        : message.isThinking 
+                            ? Colors.grey[100] 
+                            : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 3,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    children: [
+                      if (message.isThinking)
+                        _buildThinkingIndicator()
+                      else if (!message.isUser && message.content.contains("**Thought:**") || 
+                              message.content.contains("<think>"))
+                        _buildReasoningContent(message.content)
+                      else if (!message.isUser)
+                        MarkdownBody(
+                          data: message.content,
+                          styleSheet: MarkdownStyleSheet(
+                            p: TextStyle(
+                              color: message.isUser ? Colors.white : Colors.black87,
+                              fontSize: 16,
+                            ),
+                            code: TextStyle(
+                              backgroundColor: Colors.grey[200],
+                              color: Colors.black87,
+                              fontFamily: 'monospace',
+                              fontSize: 14,
+                            ),
+                            codeblockDecoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          selectable: true,
+                        )
+                      else
+                        Text(
+                          message.content,
+                          style: TextStyle(
+                            color: message.isUser ? Colors.white : Colors.black87,
+                            fontSize: 16,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (message.isUser)
+                const Padding(
+                  padding: EdgeInsets.only(left: 8.0, top: 4.0),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.green,
+                    radius: 16,
+                    child: Icon(Icons.person, color: Colors.white, size: 18),
+                  ),
+                ),
+            ],
           ),
         ),
-        PopupMenuItem(
-          value: 'gallery',
-          child: ListTile(
-            leading: Icon(Icons.image_outlined, color: Color(0xFF8B5CF6)),
-            title: Text('Gallery'),
+        Padding(
+          padding: EdgeInsets.only(
+            left: message.isUser ? 0 : 48,
+            right: message.isUser ? 48 : 0,
+            bottom: 8,
+            top: 4,
           ),
-        ),
-        PopupMenuItem(
-          value: 'files',
-          child: ListTile(
-            leading: Icon(Icons.folder_outlined, color: Color(0xFF8B5CF6)),
-            title: Text('Files'),
+          child: Row(
+            mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              Text(
+                formattedTime,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () => _showMessageOptions(context, message),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.more_horiz,
+                    size: 20,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
-      onSelected: (value) async {
-        switch (value) {
-          case 'camera':
-            // Handle camera
-            break;
-          case 'gallery':
-            // Handle gallery
-            break;
-          case 'files':
-            // Handle files
-            break;
-        }
-      },
+    );
+  }
+
+  Widget _buildReasoningContent(String content) {
+    // Check for different reasoning formats
+    
+    // Format 1: Thought and Response sections
+    if (content.contains("**Thought:**") && content.contains("**Response:**")) {
+      final parts = content.split("**Response:**");
+      final thoughtPart = parts[0].replaceAll("**Thought:**", "").trim();
+      final responsePart = parts.length > 1 ? parts[1].trim() : "";
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ExpansionTile(
+            initiallyExpanded: false,
+            tilePadding: EdgeInsets.zero,
+            title: Text(
+              "Reasoning Process",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF8B5CF6),
+              ),
+            ),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  thoughtPart,
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          MarkdownBody(
+            data: responsePart,
+            styleSheet: MarkdownStyleSheet(
+              p: TextStyle(
+                color: Colors.black87,
+                fontSize: 16,
+              ),
+              code: TextStyle(
+                backgroundColor: Colors.grey[200],
+                color: Colors.black87,
+                fontFamily: 'monospace',
+                fontSize: 14,
+              ),
+              codeblockDecoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            selectable: true,
+          ),
+        ],
+      );
+    }
+    
+    // Format 2: <think></think> tags (Deepseek format)
+    else if (content.contains("<think>") && content.contains("</think>")) {
+      final thinkRegex = RegExp(r'<think>(.*?)<\/think>', dotAll: true);
+      final match = thinkRegex.firstMatch(content);
+      
+      String thoughtPart = "";
+      String responsePart = content;
+      
+      if (match != null) {
+        thoughtPart = match.group(1)?.trim() ?? "";
+        responsePart = content.replaceAll(match.group(0) ?? "", "").trim();
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ExpansionTile(
+            initiallyExpanded: false,
+            tilePadding: EdgeInsets.zero,
+            title: Text(
+              "Reasoning Process",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF8B5CF6),
+              ),
+            ),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  thoughtPart,
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          MarkdownBody(
+            data: responsePart,
+            styleSheet: MarkdownStyleSheet(
+              p: TextStyle(
+                color: Colors.black87,
+                fontSize: 16,
+              ),
+              code: TextStyle(
+                backgroundColor: Colors.grey[200],
+                color: Colors.black87,
+                fontFamily: 'monospace',
+                fontSize: 14,
+              ),
+              codeblockDecoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            selectable: true,
+          ),
+        ],
+      );
+    }
+    
+    // Default: Just show the content as markdown
+    return MarkdownBody(
+      data: content,
+      styleSheet: MarkdownStyleSheet(
+        p: TextStyle(
+          color: Colors.black87,
+          fontSize: 16,
+        ),
+        code: TextStyle(
+          backgroundColor: Colors.grey[200],
+          color: Colors.black87,
+          fontFamily: 'monospace',
+          fontSize: 14,
+        ),
+        codeblockDecoration: BoxDecoration(
+          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      selectable: true,
+    );
+  }
+
+  Widget _buildThinkingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  "Thinking",
+                  style: TextStyle(
+                    color: Colors.grey[800],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedTextKit(
+                  animatedTexts: [
+                    TypewriterAnimatedText(
+                      '...',
+                      speed: const Duration(milliseconds: 300),
+                      textStyle: TextStyle(
+                        color: Colors.grey[800],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                  totalRepeatCount: 100,
+                  displayFullTextOnTap: false,
+                  stopPauseOnTap: false,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -443,21 +968,43 @@ class _ChatInterfaceState extends State<ChatInterface> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                "Message Options",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Divider(),
             _buildMessageOption(
               icon: Icons.copy,
-              label: 'Copy',
+              label: 'Copy to clipboard',
               onTap: () {
                 FlutterClipboard.copy(message.content);
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Copied to clipboard')),
+                _showCustomSnackBar(
+                  context: context, 
+                  message: 'Message copied to clipboard',
+                  icon: Icons.check_circle,
                 );
               },
             ),
             if (message.isUser) ...[
               _buildMessageOption(
                 icon: Icons.edit,
-                label: 'Edit',
+                label: 'Edit message',
                 onTap: () {
                   Navigator.pop(context);
                   _messageController.text = message.content;
@@ -465,37 +1012,104 @@ class _ChatInterfaceState extends State<ChatInterface> {
                   setState(() {
                     _messages.remove(message);
                   });
+                  _showCustomSnackBar(
+                    context: context, 
+                    message: 'Editing message...',
+                    icon: Icons.edit,
+                  );
                 },
               ),
             ] else ...[
               _buildMessageOption(
                 icon: Icons.refresh,
-                label: 'Regenerate',
+                label: 'Regenerate response',
                 onTap: () {
                   Navigator.pop(context);
-                  // Handle regeneration
+                  // Find the last user message before this AI message
+                  int aiIndex = _messages.indexOf(message);
+                  String? userMessage;
+                  
+                  for (int i = aiIndex - 1; i >= 0; i--) {
+                    if (_messages[i].isUser) {
+                      userMessage = _messages[i].content;
+                      break;
+                    }
+                  }
+                  
+                  if (userMessage != null) {
+                    // Remove this AI message
+                    setState(() {
+                      _messages.remove(message);
+                      _isLoading = true;
+                    });
+                    
+                    // Create a new AI message
+                    final aiMessage = Message(
+                      content: '',
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                      isThinking: true,
+                    );
+                    
+                    setState(() {
+                      _messages.add(aiMessage);
+                    });
+                    _scrollToBottom();
+                    
+                    // Get a new response
+                    _getAIResponse(userMessage).then((response) {
+                      String cleanedResponse = _cleanUpResponse(response);
+                      
+                      setState(() {
+                        aiMessage.content = cleanedResponse;
+                        aiMessage.isThinking = false;
+                        _isLoading = false;
+                      });
+                      
+                      _saveChatHistory();
+                      _scrollToBottom();
+                    }).catchError((e) {
+                      setState(() {
+                        aiMessage.content = 'Error: $e';
+                        aiMessage.isThinking = false;
+                        _isLoading = false;
+                      });
+                      
+                      _saveChatHistory();
+                      _scrollToBottom();
+                    });
+                  }
                 },
               ),
               _buildMessageOption(
                 icon: Icons.thumb_down,
-                label: 'Bad Response',
+                label: 'Report bad response',
                 onTap: () {
                   Navigator.pop(context);
-                  // Handle feedback
+                  _showCustomSnackBar(
+                    context: context, 
+                    message: 'Response reported. Thank you for your feedback!',
+                    icon: Icons.thumb_down,
+                  );
                 },
               ),
               _buildMessageOption(
                 icon: Icons.volume_up,
-                label: 'Read Aloud',
+                label: 'Read aloud',
                 onTap: () {
                   Navigator.pop(context);
-                  // Handle text-to-speech
+                  _showCustomSnackBar(
+                    context: context, 
+                    message: 'Reading aloud...',
+                    icon: Icons.volume_up,
+                  );
+                  // Implement text-to-speech functionality
                 },
               ),
             ],
             _buildMessageOption(
               icon: Icons.auto_awesome,
-              label: 'Model',
+              label: 'Change model',
               trailing: Text(
                 _selectedModelConfig?.name ?? 'Select Model',
                 style: TextStyle(color: Colors.grey[600]),
@@ -511,6 +1125,37 @@ class _ChatInterfaceState extends State<ChatInterface> {
     );
   }
 
+  void _showCustomSnackBar({
+    required BuildContext context,
+    required String message,
+    required IconData icon,
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        backgroundColor: const Color(0xFF8B5CF6),
+        duration: duration,
+      ),
+    );
+  }
+
   Widget _buildMessageOption({
     required IconData icon,
     required String label,
@@ -518,131 +1163,22 @@ class _ChatInterfaceState extends State<ChatInterface> {
     Widget? trailing,
   }) {
     return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEEF2FF),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: const Color(0xFF8B5CF6)),
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.w500,
+        ),
+      ),
       trailing: trailing,
       onTap: onTap,
-    );
-  }
-
-  Widget _buildMessageBubble(Message message) {
-    final timestamp = message.timestamp;
-    final formattedTime = "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}";
-    
-    return GestureDetector(
-      onLongPress: () => _showMessageOptions(context, message),
-      child: Column(
-        crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-              children: [
-                if (!message.isUser)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 8.0),
-                    child: CircleAvatar(
-                      backgroundColor: Color(0xFF8B5CF6),
-                      radius: 16,
-                      child: Icon(Icons.smart_toy, color: Colors.white, size: 18),
-                    ),
-                  ),
-                Flexible(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: message.isUser ? Color(0xFF8B5CF6) : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: message.isUser ? null : Border.all(color: Colors.grey[200]!),
-                    ),
-                    padding: EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (message.isThinking)
-                          _buildThinkingIndicator()
-                        else
-                          Text(
-                            message.content,
-                            style: TextStyle(
-                              color: message.isUser ? Colors.white : Colors.black87,
-                              fontSize: 16,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (message.isUser)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 8.0),
-                    child: CircleAvatar(
-                      backgroundColor: Colors.green,
-                      radius: 16,
-                      child: Icon(Icons.person, color: Colors.white, size: 18),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(
-              left: message.isUser ? 0 : 48,
-              right: message.isUser ? 48 : 0,
-              bottom: 8,
-              top: 0,
-            ),
-            child: Text(
-              formattedTime,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildThinkingIndicator() {
-    return Row(
-      children: [
-        SizedBox(
-          width: 20,
-          height: 20,
-          child: Stack(
-            children: [
-              Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
-                  ),
-                ),
-              ),
-              Center(
-                child: Icon(
-                  Icons.auto_awesome,
-                  size: 12,
-                  color: Color(0xFF8B5CF6),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(width: 8),
-        Text(
-          'Thinking...',
-          style: TextStyle(
-            color: Colors.black87,
-            fontSize: 16,
-          ),
-        ),
-      ],
     );
   }
 
@@ -662,7 +1198,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              margin: EdgeInsets.symmetric(vertical: 8),
+              margin: const EdgeInsets.symmetric(vertical: 8),
               width: 40,
               height: 4,
               decoration: BoxDecoration(
@@ -671,7 +1207,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
               ),
             ),
             Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Text(
                 'Select Model',
                 style: TextStyle(
@@ -698,9 +1234,9 @@ class _ChatInterfaceState extends State<ChatInterface> {
                       Navigator.pop(context);
                     },
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: isSelected ? Color(0xFFF3F4F6) : Colors.transparent,
+                        color: isSelected ? const Color(0xFFF3F4F6) : Colors.transparent,
                         border: Border(
                           bottom: BorderSide(color: Colors.grey[200]!),
                         ),
@@ -708,18 +1244,18 @@ class _ChatInterfaceState extends State<ChatInterface> {
                       child: Row(
                         children: [
                           Container(
-                            padding: EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Color(0xFF8B5CF6).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
+                              color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                              shape: BoxShape.circle,
                             ),
                             child: Icon(
                               _getProviderIcon(),
-                              color: Color(0xFF8B5CF6),
+                              color: const Color(0xFF8B5CF6),
                               size: 20,
                             ),
                           ),
-                          SizedBox(width: 12),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -742,7 +1278,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                             ),
                           ),
                           if (isSelected)
-                            Icon(Icons.check_circle, color: Color(0xFF8B5CF6)),
+                            Icon(Icons.check_circle, color: const Color(0xFF8B5CF6)),
                         ],
                       ),
                     ),
@@ -750,7 +1286,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 },
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
           ],
         ),
       ),

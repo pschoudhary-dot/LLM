@@ -7,7 +7,10 @@ import 'pocket_llm_service.dart';
 
 class ChatService {
   // Get response from the selected model
-  static Future<String> getModelResponse(String userMessage, {bool stream = false}) async {
+  static Future<String> getModelResponse(String userMessage, {
+    bool stream = false,
+    Function(String)? onToken,
+  }) async {
     try {
       // Get the selected model configuration
       final selectedModelId = await ModelService.getSelectedModel();
@@ -24,25 +27,25 @@ class ChatService {
       // Call the appropriate provider based on the model configuration
       switch (modelConfig.provider) {
         case ModelProvider.pocketLLM:
-          return await _getPocketLLMResponse(modelConfig, userMessage, stream);
+          return await _getPocketLLMResponse(modelConfig, userMessage, stream, onToken);
         
         case ModelProvider.ollama:
-          return await _getOllamaResponse(modelConfig, userMessage, stream);
+          return await _getOllamaResponse(modelConfig, userMessage, stream, onToken);
         
         case ModelProvider.openAI:
-          return await _getOpenAIResponse(modelConfig, userMessage, stream);
+          return await _getOpenAIResponse(modelConfig, userMessage, stream, onToken);
         
         case ModelProvider.anthropic:
-          return await _getAnthropicResponse(modelConfig, userMessage, stream);
+          return await _getAnthropicResponse(modelConfig, userMessage, stream, onToken);
         
         case ModelProvider.mistral:
-          return await _getMistralResponse(modelConfig, userMessage, stream);
+          return await _getMistralResponse(modelConfig, userMessage, stream, onToken);
         
         case ModelProvider.deepseek:
-          return await _getDeepseekResponse(modelConfig, userMessage, stream);
+          return await _getDeepseekResponse(modelConfig, userMessage, stream, onToken);
         
         case ModelProvider.lmStudio:
-          return await _getLMStudioResponse(modelConfig, userMessage, stream);
+          return await _getLMStudioResponse(modelConfig, userMessage, stream, onToken);
       }
     } catch (e) {
       debugPrint('Error getting model response: $e');
@@ -53,94 +56,115 @@ class ChatService {
   // Get response from Ollama
   static Future<String> _getOllamaResponse(
     ModelConfig config, 
-    String userMessage,
+    String userMessage, 
     bool stream,
+    Function(String)? onToken,
   ) async {
+    final baseUrl = config.baseUrl;
+    final additionalParams = config.additionalParams ?? {};
+    final temperature = additionalParams['temperature'] as double? ?? 0.7;
+    final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
+    
+    // First check if the model exists
     try {
-      debugPrint('Connecting to Ollama at ${config.baseUrl}');
+      final response = await http.get(Uri.parse('$baseUrl/api/tags'));
+      if (response.statusCode != 200) {
+        throw Exception('Failed to connect to Ollama server');
+      }
+    } catch (e) {
+      debugPrint('Error checking Ollama models: $e');
+      return 'Error connecting to Ollama server at ${config.baseUrl}. Please make sure Ollama is running.';
+    }
+    
+    // Try using the chat completion API with streaming
+    try {
+      // Prepare messages with system prompt if provided
+      final messages = <Map<String, String>>[];
       
-      // Get additional parameters
-      final additionalParams = config.additionalParams ?? {};
-      final systemPrompt = additionalParams['systemPrompt'] as String? ?? '';
-      final temperature = additionalParams['temperature'] as double? ?? 0.7;
-      
-      // First check if the model exists
-      try {
-        final modelResponse = await http.get(
-          Uri.parse('${config.baseUrl}/api/tags'),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        );
-        
-        bool modelExists = false;
-        
-        if (modelResponse.statusCode == 200) {
-          final data = jsonDecode(modelResponse.body);
-          final models = (data['models'] as List<dynamic>?) ?? [];
-          modelExists = models.any((model) => model['name'] == config.id);
-        } else {
-          // Try the v1 API endpoint
-          final v1Response = await http.get(
-            Uri.parse('${config.baseUrl}/v1/models'),
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          );
-          
-          if (v1Response.statusCode == 200) {
-            final data = jsonDecode(v1Response.body);
-            final models = (data['models'] as List<dynamic>?) ?? [];
-            modelExists = models.any((model) => model['id'] == config.id);
-          }
-        }
-        
-        if (!modelExists) {
-          return 'Model "${config.id}" not found in Ollama. Please make sure it is installed.';
-        }
-      } catch (e) {
-        debugPrint('Error checking Ollama models: $e');
-        return 'Error connecting to Ollama server at ${config.baseUrl}. Please make sure Ollama is running.';
+      if (systemPrompt.isNotEmpty) {
+        messages.add({
+          'role': 'system',
+          'content': systemPrompt,
+        });
       }
       
-      // Try using the chat completion API with streaming
-      try {
-        // Prepare messages with system prompt if provided
-        final messages = <Map<String, String>>[];
-        
-        if (systemPrompt.isNotEmpty) {
-          messages.add({
-            'role': 'system',
-            'content': systemPrompt,
-          });
-        }
-        
-        messages.add({
-          'role': 'user',
-          'content': userMessage,
-        });
+      messages.add({
+        'role': 'user',
+        'content': userMessage,
+      });
 
-        final client = http.Client();
-        final request = http.Request(
+      final client = http.Client();
+      final request = http.Request(
+        'POST',
+        Uri.parse('${config.baseUrl}/api/chat'),
+      );
+      
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode({
+        'model': config.id,
+        'messages': messages,
+        'stream': true,
+        'temperature': temperature,
+      });
+
+      final response = await client.send(request);
+      
+      if (response.statusCode == 200) {
+        final completer = Completer<String>();
+        final buffer = StringBuffer();
+        
+        response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+            (line) {
+              if (line.trim().isNotEmpty) {
+                try {
+                  final data = jsonDecode(line);
+                  final content = data['message']?['content'] ?? '';
+                  if (content.isNotEmpty) {
+                    buffer.write(content);
+                    if (stream && onToken != null) {
+                      onToken(content);
+                    }
+                  }
+                } catch (e) {
+                  debugPrint('Error parsing streaming response: $e');
+                }
+              }
+            },
+            onDone: () {
+              completer.complete(buffer.toString());
+            },
+            onError: (e) {
+              completer.completeError('Error streaming response: $e');
+            },
+            cancelOnError: true,
+          );
+        
+        return await completer.future;
+      } else {
+        // Try the v1 API endpoint
+        final v1Request = http.Request(
           'POST',
-          Uri.parse('${config.baseUrl}/api/chat'),
+          Uri.parse('${config.baseUrl}/v1/chat/completions'),
         );
         
-        request.headers['Content-Type'] = 'application/json';
-        request.body = jsonEncode({
+        v1Request.headers['Content-Type'] = 'application/json';
+        v1Request.body = jsonEncode({
           'model': config.id,
           'messages': messages,
           'stream': true,
           'temperature': temperature,
         });
 
-        final response = await client.send(request);
+        final v1Response = await client.send(v1Request);
         
-        if (response.statusCode == 200) {
+        if (v1Response.statusCode == 200) {
           final completer = Completer<String>();
           final buffer = StringBuffer();
           
-          response.stream
+          v1Response.stream
             .transform(utf8.decoder)
             .transform(const LineSplitter())
             .listen(
@@ -148,9 +172,12 @@ class ChatService {
                 if (line.trim().isNotEmpty) {
                   try {
                     final data = jsonDecode(line);
-                    final content = data['message']?['content'] ?? '';
+                    final content = data['choices']?[0]?['delta']?['content'] ?? '';
                     if (content.isNotEmpty) {
                       buffer.write(content);
+                      if (stream && onToken != null) {
+                        onToken(content);
+                      }
                     }
                   } catch (e) {
                     debugPrint('Error parsing streaming response: $e');
@@ -168,84 +195,12 @@ class ChatService {
           
           return await completer.future;
         } else {
-          // Try the v1 API endpoint
-          final v1Request = http.Request(
-            'POST',
-            Uri.parse('${config.baseUrl}/v1/chat/completions'),
-          );
-          
-          v1Request.headers['Content-Type'] = 'application/json';
-          v1Request.body = jsonEncode({
-            'model': config.id,
-            'messages': messages,
-            'stream': true,
-            'temperature': temperature,
-          });
-
-          final v1Response = await client.send(v1Request);
-          
-          if (v1Response.statusCode == 200) {
-            final completer = Completer<String>();
-            final buffer = StringBuffer();
-            
-            v1Response.stream
-              .transform(utf8.decoder)
-              .transform(const LineSplitter())
-              .listen(
-                (line) {
-                  if (line.trim().isNotEmpty) {
-                    try {
-                      final data = jsonDecode(line);
-                      final content = data['choices']?[0]?['delta']?['content'] ?? '';
-                      if (content.isNotEmpty) {
-                        buffer.write(content);
-                      }
-                    } catch (e) {
-                      debugPrint('Error parsing streaming response: $e');
-                    }
-                  }
-                },
-                onDone: () {
-                  completer.complete(buffer.toString());
-                },
-                onError: (e) {
-                  completer.completeError('Error streaming response: $e');
-                },
-                cancelOnError: true,
-              );
-            
-            return await completer.future;
-          }
+          throw Exception('Failed to get response from Ollama: ${v1Response.statusCode}');
         }
-        
-        // Fall back to the generate API if chat completion fails
-        final generateResponse = await http.post(
-          Uri.parse('${config.baseUrl}/api/generate'),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'model': config.id,
-            'prompt': systemPrompt.isNotEmpty 
-                ? '$systemPrompt\n\n$userMessage' 
-                : userMessage,
-            'temperature': temperature,
-          }),
-        );
-        
-        if (generateResponse.statusCode == 200) {
-          final data = jsonDecode(generateResponse.body);
-          return data['response'] ?? '';
-        } else {
-          return 'Failed to get response from Ollama: ${generateResponse.statusCode}';
-        }
-      } catch (e) {
-        debugPrint('Error getting Ollama response: $e');
-        return 'Error connecting to Ollama: $e';
       }
     } catch (e) {
-      debugPrint('Error getting Ollama response: $e');
-      return 'Error connecting to Ollama: $e';
+      debugPrint('Error with Ollama API: $e');
+      throw Exception('Error communicating with Ollama: $e');
     }
   }
   
@@ -254,6 +209,7 @@ class ChatService {
     ModelConfig config, 
     String userMessage,
     bool stream,
+    Function(String)? onToken,
   ) async {
     try {
       debugPrint('Connecting to OpenAI compatible API at ${config.baseUrl}');
@@ -315,6 +271,7 @@ class ChatService {
     ModelConfig config, 
     String userMessage,
     bool stream,
+    Function(String)? onToken,
   ) async {
     try {
       debugPrint('Connecting to Anthropic API at ${config.baseUrl}');
@@ -371,6 +328,7 @@ class ChatService {
     ModelConfig config, 
     String userMessage,
     bool stream,
+    Function(String)? onToken,
   ) async {
     try {
       debugPrint('Connecting to LLM Studio at ${config.baseUrl}');
@@ -414,6 +372,7 @@ class ChatService {
     ModelConfig config, 
     String userMessage,
     bool stream,
+    Function(String)? onToken,
   ) async {
     try {
       debugPrint('Connecting to PocketLLM at ${config.baseUrl}');
@@ -463,6 +422,7 @@ class ChatService {
     ModelConfig config, 
     String userMessage,
     bool stream,
+    Function(String)? onToken,
   ) async {
     try {
       debugPrint('Connecting to Mistral at ${config.baseUrl}');
@@ -518,6 +478,7 @@ class ChatService {
     ModelConfig config, 
     String userMessage,
     bool stream,
+    Function(String)? onToken,
   ) async {
     try {
       debugPrint('Connecting to DeepSeek at ${config.baseUrl}');

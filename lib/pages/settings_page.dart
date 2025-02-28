@@ -5,6 +5,8 @@ import '../component/model_config_dialog.dart';
 import 'model_settings_page.dart';
 import 'api_keys_page.dart';
 import '../services/model_service.dart';
+import '../services/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'search_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -15,6 +17,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  final _authService = AuthService();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -44,6 +48,12 @@ class _SettingsPageState extends State<SettingsPage> {
             iconColor: Colors.blue,
             title: 'Profile Settings',
             subtitle: 'Manage your account and preferences',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ProfileSettingsPage()),
+              );
+            },
           ),
           _buildSettingsItem(
             icon: Icons.notifications_outlined,
@@ -168,6 +178,9 @@ class _SettingsPageState extends State<SettingsPage> {
             title: 'App Information',
             subtitle: 'Version, licenses, and documentation',
           ),
+          
+          SizedBox(height: 40),
+          _buildLogoutButton(),
         ],
       ),
     );
@@ -196,6 +209,14 @@ class _SettingsPageState extends State<SettingsPage> {
     VoidCallback? onTap,
     VoidCallback? onAddPressed,
   }) {
+    // Check if this is one of the implemented features
+    bool isImplemented = [
+      'Profile Settings',
+      'Model Settings',
+      'Search Configuration',
+      'API Keys',
+    ].contains(title);
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -203,10 +224,33 @@ class _SettingsPageState extends State<SettingsPage> {
         side: BorderSide(color: Colors.grey[200]!),
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: isImplemented 
+            ? onTap 
+            : () {
+                // Show "Coming Soon" alert for unimplemented features
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text('Coming Soon'),
+                    content: Text('This feature is currently under development and will be available in a future update.'),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          'OK',
+                          style: TextStyle(color: Color(0xFF8B5CF6)),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(16),
           child: Row(
             children: [
               Container(
@@ -241,20 +285,105 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ),
               ),
-              if (showActionButtons)
+              if (showActionButtons && isImplemented)
                 Row(
                   children: [
                     IconButton(
-                      icon: Icon(Icons.add_circle_outline, color: Color(0xFF8B5CF6)),
+                      icon: Icon(Icons.add, color: Color(0xFF8B5CF6)),
                       onPressed: onAddPressed,
                     ),
-                    Icon(Icons.chevron_right, color: Colors.grey[400]),
+                    Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
                   ],
                 )
+              else if (isImplemented)
+                Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16)
               else
-                Icon(Icons.chevron_right, color: Colors.grey[400]),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.amber[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Coming Soon',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.amber[800],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ElevatedButton(
+        onPressed: () async {
+          // Show confirmation dialog
+          final shouldLogout = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('Logout'),
+              content: Text('Are you sure you want to logout?'),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: Text(
+                    'Logout',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+          );
+          
+          if (shouldLogout == true) {
+            // Perform logout
+            await _authService.signOut();
+            // Navigate to login screen
+            Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red[50],
+          foregroundColor: Colors.red,
+          padding: EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.red.withOpacity(0.5)),
+          ),
+          elevation: 0,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout, color: Colors.red),
+            SizedBox(width: 8),
+            Text(
+              'Logout',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
+            ),
+          ],
         ),
       ),
     );

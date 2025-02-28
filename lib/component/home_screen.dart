@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'custom_app_bar.dart';
 import 'chat_interface.dart';
-import 'sidebar.dart';  // Add this import
+import 'sidebar.dart';
+import '../pages/settings_page.dart';
 
 class HomeScreen extends StatelessWidget {
-  void _openSettings() {
-    // Handle settings press
-    print('Settings pressed');
+  const HomeScreen({Key? key}) : super(key: key);
+
+  void _openSettings(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsPage()),
+    );
   }
 
   @override
@@ -14,9 +19,9 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: CustomAppBar(
         appName: 'PocketLLM',
-        onSettingsPressed: _openSettings,
+        onSettingsPressed: () => _openSettings(context),
       ),
-      drawer: Sidebar(),  // Add this line to connect the Sidebar
+      drawer: Sidebar(),
       body: ChatInterface(),
     );
   }

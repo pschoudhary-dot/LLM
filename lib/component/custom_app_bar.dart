@@ -59,6 +59,20 @@ class _CustomAppBarState extends State<CustomAppBar> {
     setState(() {
       _selectedModelId = id;
     });
+    
+    // Notify the app that the model has changed
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Active model updated'),
+        backgroundColor: Color(0xFF8B5CF6),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ),
+    );
   }
 
   @override
@@ -127,14 +141,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
                 ),
                 IconButton(
                   icon: Icon(Icons.settings_outlined, color: Colors.black87),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsPage(),
-                      ),
-                    );
-                  },
+                  onPressed: widget.onSettingsPressed,
                 ),
               ],
             ),
@@ -217,10 +224,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
                 title: Text('Add New Model'),
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => SettingsPage()),
-                  );
+                  widget.onSettingsPressed();
                 },
               ),
             ],
