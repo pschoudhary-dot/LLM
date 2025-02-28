@@ -22,7 +22,7 @@ class HomeScreen extends StatelessWidget {
         onSettingsPressed: () => _openSettings(context),
       ),
       drawer: Sidebar(),
-      body: ChatInterface(),
+      body: const ChatInterface(),
     );
   }
 }

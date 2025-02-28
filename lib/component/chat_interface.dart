@@ -8,11 +8,19 @@ import '../services/chat_service.dart';
 import '../services/model_service.dart' as service;
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'package:path/path.dart' as path;
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:async';
 
 class ChatInterface extends StatefulWidget {
+  const ChatInterface({Key? key}) : super(key: key);
+
   @override
   _ChatInterfaceState createState() => _ChatInterfaceState();
 }
@@ -20,23 +28,33 @@ class ChatInterface extends StatefulWidget {
 class _ChatInterfaceState extends State<ChatInterface> {
   // Add these new state variables at the top of the class
   bool _showAttachmentOptions = false;
-  double _inputHeight = 56.0;
+  final double _inputHeight = 56.0;
   final double _maxInputHeight = 120.0;  // Maximum height for input area
   final TextEditingController _messageController = TextEditingController();
   final List<Message> _messages = [];
+  
+  // Getter for messages
+  List<Message> get messages => List.unmodifiable(_messages);
+  
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
   String? _selectedModelId;
   service.ModelConfig? _selectedModelConfig;
+  List<service.ModelConfig> _modelConfigs = [];
+  bool _isStreaming = false;
+  String _currentStreamedResponse = '';
+  String _currentThought = '';
+  bool _isTyping = false;
+  
+  // Restore missing variables
   final String apiKey = 'ddc-m4qlvrgpt1W1E4ZXc4bvm5T5Z6CRFLeXRCx9AbRuQOcGpFFrX2';
   final String apiUrl = 'https://api.sree.shop/v1/chat/completions';
   final TavilyService _tavilyService = TavilyService();
   bool _isOnline = false;
   final ChatHistoryManager _chatHistoryManager = ChatHistoryManager();
-  bool _isTyping = false;
 
   // Suggested messages (dynamic)
-  List<String> _suggestedMessages = [
+  final List<String> _suggestedMessages = [
     "🤔 What's the meaning of life?",
     "🌍 How can we protect the environment?",
     "🤖 What are the latest AI trends?"
@@ -85,7 +103,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
     if (_selectedModelId == null || _selectedModelConfig == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please select a model in the app bar first'),
+          content: const Text('Please select a model in the app bar first'),
           action: SnackBarAction(
             label: 'Settings',
             onPressed: () {
@@ -295,11 +313,11 @@ class _ChatInterfaceState extends State<ChatInterface> {
 
   void _scrollToBottom() {
     // Add a small delay to ensure the UI has updated before scrolling
-    Future.delayed(Duration(milliseconds: 50), () {
+    Future.delayed(const Duration(milliseconds: 50), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
@@ -412,7 +430,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
           children: [
             Text(
               title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
@@ -642,12 +660,12 @@ class _ChatInterfaceState extends State<ChatInterface> {
             mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             children: [
               if (!message.isUser)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0, top: 4.0),
+                const Padding(
+                  padding: EdgeInsets.only(right: 8.0, top: 4.0),
                   child: CircleAvatar(
-                    backgroundColor: const Color(0xFF8B5CF6),
+                    backgroundColor: Color(0xFF8B5CF6),
                     radius: 16,
-                    child: const Icon(Icons.smart_toy, color: Colors.white, size: 18),
+                    child: Icon(Icons.smart_toy, color: Colors.white, size: 18),
                   ),
                 ),
               Flexible(
@@ -677,6 +695,40 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     children: [
                       if (message.isThinking)
                         _buildThinkingIndicator()
+                      else if (!message.isUser && message.isStreaming)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: MarkdownBody(
+                                data: message.content,
+                                styleSheet: MarkdownStyleSheet(
+                                  p: TextStyle(
+                                    color: message.isUser ? Colors.white : const Color(0xFF1F2937),
+                                    fontSize: 16,
+                                    height: 1.5,
+                                  ),
+                                  code: TextStyle(
+                                    backgroundColor: Colors.grey[100],
+                                    color: const Color(0xFF1F2937),
+                                    fontFamily: 'monospace',
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF8B5CF6),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
                       else if (!message.isUser && (message.content.contains("**Thought:**") || 
                               message.content.contains("<think>")))
                         _buildReasoningContent(message.content)
@@ -853,11 +905,11 @@ class _ChatInterfaceState extends State<ChatInterface> {
           ExpansionTile(
             initiallyExpanded: false,
             tilePadding: EdgeInsets.zero,
-            title: Text(
+            title: const Text(
               "Reasoning Process",
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFF8B5CF6),
+                color: Color(0xFF8B5CF6),
               ),
             ),
             children: [
@@ -869,7 +921,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 ),
                 child: Text(
                   thoughtPart,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.black87,
                     fontSize: 14,
                   ),
@@ -881,7 +933,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
           MarkdownBody(
             data: responsePart,
             styleSheet: MarkdownStyleSheet(
-              p: TextStyle(
+              p: const TextStyle(
                 color: Colors.black87,
                 fontSize: 16,
               ),
@@ -906,7 +958,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
     return MarkdownBody(
       data: content,
       styleSheet: MarkdownStyleSheet(
-        p: TextStyle(
+        p: const TextStyle(
           color: Colors.black87,
           fontSize: 16,
         ),
@@ -974,7 +1026,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => SafeArea(
@@ -990,8 +1042,8 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 "Message Options",
                 style: TextStyle(
@@ -1000,7 +1052,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 ),
               ),
             ),
-            Divider(),
+            const Divider(),
             _buildMessageOption(
               icon: Icons.copy,
               label: 'Copy to clipboard',
@@ -1154,7 +1206,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
             Expanded(
               child: Text(
                 message,
-                style: TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.white),
               ),
             ),
           ],
@@ -1186,7 +1238,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
       ),
       title: Text(
         label,
-        style: TextStyle(
+        style: const TextStyle(
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -1203,7 +1255,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -1219,8 +1271,8 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
+            const Padding(
+              padding: EdgeInsets.all(16),
               child: Text(
                 'Select Model',
                 style: TextStyle(
@@ -1275,7 +1327,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                               children: [
                                 Text(
                                   config.name,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontWeight: FontWeight.w600,
                                     color: Colors.black87,
                                   ),
@@ -1291,7 +1343,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                             ),
                           ),
                           if (isSelected)
-                            Icon(Icons.check_circle, color: const Color(0xFF8B5CF6)),
+                            const Icon(Icons.check_circle, color: Color(0xFF8B5CF6)),
                         ],
                       ),
                     ),

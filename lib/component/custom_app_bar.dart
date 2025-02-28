@@ -18,7 +18,7 @@ class CustomAppBar extends StatefulWidget implements PreferredSizeWidget {
   _CustomAppBarState createState() => _CustomAppBarState();
 
   @override
-  Size get preferredSize => Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
 
 class _CustomAppBarState extends State<CustomAppBar> {
@@ -68,8 +68,8 @@ class _CustomAppBarState extends State<CustomAppBar> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Active model updated'),
-          backgroundColor: Color(0xFF8B5CF6),
+          content: const Text('Active model updated'),
+          backgroundColor: const Color(0xFF8B5CF6),
           behavior: SnackBarBehavior.floating,
           action: SnackBarAction(
             label: 'OK',
@@ -101,7 +101,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
         : null;
 
     return PreferredSize(
-      preferredSize: Size.fromHeight(kToolbarHeight),
+      preferredSize: const Size.fromHeight(kToolbarHeight),
       child: ClipRRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -130,14 +130,14 @@ class _CustomAppBarState extends State<CustomAppBar> {
                     children: [
                       Text(
                         selectedModel != null ? selectedModel.name : 'PocketLLM',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.black87,
                           fontWeight: FontWeight.w600,
                           fontSize: 18,
                         ),
                       ),
-                      SizedBox(width: 4),
-                      Icon(
+                      const SizedBox(width: 4),
+                      const Icon(
                         Icons.arrow_drop_down,
                         color: Colors.black54,
                         size: 20,
@@ -148,14 +148,14 @@ class _CustomAppBarState extends State<CustomAppBar> {
               ),
               actions: [
                 IconButton(
-                  icon: Icon(Icons.add, color: Colors.black87),
+                  icon: const Icon(Icons.add, color: Colors.black87),
                   onPressed: () {
                     // Handle new chat
                     print('New Chat pressed');
                   },
                 ),
                 IconButton(
-                  icon: Icon(Icons.settings_outlined, color: Colors.black87),
+                  icon: const Icon(Icons.settings_outlined, color: Colors.black87),
                   onPressed: widget.onSettingsPressed,
                 ),
               ],
@@ -170,13 +170,13 @@ class _CustomAppBarState extends State<CustomAppBar> {
     if (_modelConfigs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No models configured. Add models in Settings.'),
+          content: const Text('No models configured. Add models in Settings.'),
           action: SnackBarAction(
             label: 'Settings',
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => SettingsPage()),
+                MaterialPageRoute(builder: (context) => const SettingsPage()),
               );
             },
           ),
@@ -187,7 +187,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
 
     showModalBottomSheet(
       context: context,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
@@ -195,8 +195,8 @@ class _CustomAppBarState extends State<CustomAppBar> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
                 child: Text(
                   'Select Model',
                   style: TextStyle(
@@ -205,7 +205,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
                   ),
                 ),
               ),
-              Divider(),
+              const Divider(),
               Expanded(
                 child: ListView.builder(
                   itemCount: _modelConfigs.length,
@@ -223,7 +223,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
                       ),
                       subtitle: Text(model.provider.displayName),
                       trailing: isSelected
-                          ? Icon(Icons.check_circle, color: Color(0xFF8B5CF6))
+                          ? const Icon(Icons.check_circle, color: Color(0xFF8B5CF6))
                           : null,
                       onTap: () {
                         _selectModel(model.id);
@@ -233,10 +233,10 @@ class _CustomAppBarState extends State<CustomAppBar> {
                   },
                 ),
               ),
-              Divider(),
+              const Divider(),
               ListTile(
-                leading: Icon(Icons.add_circle_outline, color: Color(0xFF8B5CF6)),
-                title: Text('Add New Model'),
+                leading: const Icon(Icons.add_circle_outline, color: Color(0xFF8B5CF6)),
+                title: const Text('Add New Model'),
                 onTap: () {
                   Navigator.pop(context);
                   widget.onSettingsPressed();
@@ -285,7 +285,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
     }
 
     return Container(
-      padding: EdgeInsets.all(8),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: iconColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
@@ -300,7 +300,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => LibraryPage(),
+            builder: (context) => const LibraryPage(),
           ),
         );
         break;
