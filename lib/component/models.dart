@@ -151,14 +151,35 @@ class Message {
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
-      content: json['content'],
-      isUser: json['isUser'],
-      timestamp: DateTime.parse(json['timestamp']),
+      content: json['content'] ?? '',
+      isUser: json['isUser'] ?? false,
+      timestamp: json['timestamp'] != null 
+          ? DateTime.parse(json['timestamp']) 
+          : DateTime.now(),
       isThinking: json['isThinking'] ?? false,
       isStreaming: json['isStreaming'] ?? false,
       sources: json['sources'] != null
           ? (json['sources'] as List).map((s) => SearchResult.fromJson(s as Map<String, dynamic>)).toList()
           : null,
+    );
+  }
+
+  // Create a copy of this message with updated properties
+  Message copyWith({
+    String? content,
+    bool? isUser,
+    DateTime? timestamp,
+    bool? isThinking,
+    bool? isStreaming,
+    List<SearchResult>? sources,
+  }) {
+    return Message(
+      content: content ?? this.content,
+      isUser: isUser ?? this.isUser,
+      timestamp: timestamp ?? this.timestamp,
+      isThinking: isThinking ?? this.isThinking,
+      isStreaming: isStreaming ?? this.isStreaming,
+      sources: sources ?? this.sources,
     );
   }
 }

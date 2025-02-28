@@ -142,6 +142,9 @@ class _AuthPageState extends State<AuthPage> {
           // Navigate to user survey page
           if (!mounted) return;
           
+          // Clear any previous error messages
+          ScaffoldMessenger.of(context).clearSnackBars();
+          
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Account created successfully! Complete your profile to get started.'),
@@ -150,6 +153,7 @@ class _AuthPageState extends State<AuthPage> {
             ),
           );
           
+          // Use pushReplacement to avoid navigation stack issues
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(

@@ -54,25 +54,40 @@ class _CustomAppBarState extends State<CustomAppBar> {
     }
   }
 
-  void _selectModel(String id) async {
-    await ModelService.setSelectedModel(id);
-    setState(() {
-      _selectedModelId = id;
-    });
-    
-    // Notify the app that the model has changed
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Active model updated'),
-        backgroundColor: Color(0xFF8B5CF6),
-        behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
+  Future<void> _selectModel(String id) async {
+    try {
+      await ModelService.setSelectedModel(id);
+      setState(() {
+        _selectedModelId = id;
+      });
+      
+      // Reload the model configs to ensure we have the latest data
+      await _loadModelConfigs();
+      
+      // Notify the user that the model has been updated
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Active model updated'),
+          backgroundColor: Color(0xFF8B5CF6),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {},
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update model: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -256,14 +271,17 @@ class _CustomAppBarState extends State<CustomAppBar> {
         iconColor = Colors.blue;
         break;
       case ModelProvider.pocketLLM:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+        iconData = Icons.phone_android;
+        iconColor = Colors.indigo;
+        break;
       case ModelProvider.mistral:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+        iconData = Icons.air;
+        iconColor = Colors.teal;
+        break;
       case ModelProvider.deepseek:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+        iconData = Icons.search;
+        iconColor = Colors.deepPurple;
+        break;
     }
 
     return Container(

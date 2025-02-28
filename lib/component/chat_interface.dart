@@ -174,7 +174,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
             }
           });
           _saveChatHistory();
-          
+          _scrollToBottom();
           // If online, perform web search
           if (_isOnline) {
             _performWebSearch(message).then((searchResults) {
@@ -208,6 +208,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                   }
                 });
                 _saveChatHistory();
+                _scrollToBottom();
               }
             }).catchError((e) {
               print('Error performing web search: $e');
@@ -293,11 +294,12 @@ class _ChatInterfaceState extends State<ChatInterface> {
   }
 
   void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Add a small delay to ensure the UI has updated before scrolling
+    Future.delayed(Duration(milliseconds: 50), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
@@ -656,9 +658,12 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     color: message.isUser 
                         ? const Color(0xFF8B5CF6) 
                         : message.isThinking 
-                            ? Colors.grey[100] 
-                            : const Color(0xFFF3F4F6),
+                            ? const Color(0xFFF3F4F6)
+                            : Colors.white,
                     borderRadius: BorderRadius.circular(16),
+                    border: !message.isUser && !message.isThinking
+                        ? Border.all(color: const Color(0xFFE5E7EB))
+                        : null,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.05),
@@ -672,36 +677,39 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     children: [
                       if (message.isThinking)
                         _buildThinkingIndicator()
-                      else if (!message.isUser && message.content.contains("**Thought:**") || 
-                              message.content.contains("<think>"))
+                      else if (!message.isUser && (message.content.contains("**Thought:**") || 
+                              message.content.contains("<think>")))
                         _buildReasoningContent(message.content)
                       else if (!message.isUser)
                         MarkdownBody(
                           data: message.content,
                           styleSheet: MarkdownStyleSheet(
-                            p: TextStyle(
-                              color: message.isUser ? Colors.white : Colors.black87,
+                            p: const TextStyle(
+                              color: Color(0xFF1F2937),
                               fontSize: 16,
+                              height: 1.5,
                             ),
                             code: TextStyle(
-                              backgroundColor: Colors.grey[200],
-                              color: Colors.black87,
+                              backgroundColor: Colors.grey[100],
+                              color: const Color(0xFF1F2937),
                               fontFamily: 'monospace',
                               fontSize: 14,
                             ),
                             codeblockDecoration: BoxDecoration(
-                              color: Colors.grey[200],
+                              color: const Color(0xFFF9FAFB),
                               borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
                             ),
                           ),
                           selectable: true,
                         )
                       else
-                        Text(
+                        SelectableText(
                           message.content,
-                          style: TextStyle(
-                            color: message.isUser ? Colors.white : Colors.black87,
+                          style: const TextStyle(
+                            color: Colors.white,
                             fontSize: 16,
+                            height: 1.5,
                           ),
                         ),
                     ],
@@ -772,11 +780,12 @@ class _ChatInterfaceState extends State<ChatInterface> {
           ExpansionTile(
             initiallyExpanded: false,
             tilePadding: EdgeInsets.zero,
-            title: Text(
+            title: const Text(
               "Reasoning Process",
               style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF8B5CF6),
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF8B5CF6),
+                fontSize: 14,
               ),
             ),
             children: [
@@ -785,12 +794,14 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF3F4F6),
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
                 child: Text(
                   thoughtPart,
-                  style: TextStyle(
-                    color: Colors.black87,
+                  style: const TextStyle(
+                    color: Color(0xFF4B5563),
                     fontSize: 14,
+                    height: 1.5,
                   ),
                 ),
               ),
@@ -800,19 +811,21 @@ class _ChatInterfaceState extends State<ChatInterface> {
           MarkdownBody(
             data: responsePart,
             styleSheet: MarkdownStyleSheet(
-              p: TextStyle(
-                color: Colors.black87,
+              p: const TextStyle(
+                color: Color(0xFF1F2937),
                 fontSize: 16,
+                height: 1.5,
               ),
               code: TextStyle(
-                backgroundColor: Colors.grey[200],
-                color: Colors.black87,
+                backgroundColor: Colors.grey[100],
+                color: const Color(0xFF1F2937),
                 fontFamily: 'monospace',
                 fontSize: 14,
               ),
               codeblockDecoration: BoxDecoration(
-                color: Colors.grey[200],
+                color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
             ),
             selectable: true,

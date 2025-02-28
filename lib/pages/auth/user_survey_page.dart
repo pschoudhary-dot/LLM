@@ -26,6 +26,9 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
   String? _selectedProfession;
   String? _selectedSource;
   bool _isLoading = false;
+  bool _isSubmitting = false;
+  bool _isComplete = false;
+  String? _errorMessage;
   final _supabase = Supabase.instance.client;
   final _authService = AuthService();
   late String _selectedAvatar;
@@ -85,64 +88,53 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
     }
   }
 
-  Future<void> _saveUserData() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Update user profile in the database
-      await _supabase
-          .from('profiles')
-          .update({
-            'full_name': _nameController.text,
-            'username': _usernameController.text,
-            'bio': _bioController.text,
-            'date_of_birth': _selectedDate?.toIso8601String(),
-            'profession': _selectedProfession,
-            'heard_from': _selectedSource,
-            'avatar_url': _selectedAvatar,
-            'survey_completed': true,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', widget.userId)
-          .execute();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile completed successfully!'),
-            backgroundColor: Color(0xFF8B5CF6),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        // Navigate to the home page and call onComplete
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            widget.onComplete();
-            // Use pushReplacementNamed instead of pushNamedAndRemoveUntil for better navigation
-            Navigator.of(context).pushReplacementNamed('/home');
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving profile: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
+  Future<void> _saveProfileAndComplete() async {
+    if (_formKey.currentState!.validate()) {
+      try {
         setState(() {
-          _isLoading = false;
+          _isSubmitting = true;
         });
+        
+        // Update the user profile with the survey answers
+        await _authService.updateUserProfile(
+          userId: widget.userId,
+          fullName: _nameController.text,
+          username: _usernameController.text,
+          bio: _bioController.text,
+          profession: _selectedProfession,
+          heardFrom: _selectedSource,
+          avatarUrl: _selectedAvatar,
+          surveyCompleted: true,
+        );
+        
+        setState(() {
+          _isSubmitting = false;
+          _isComplete = true;
+        });
+        
+        // Call the onComplete callback
+        widget.onComplete();
+        
+        // Navigate to the home page
+        if (mounted) {
+          // Clear any existing routes and go directly to home
+          await Future.delayed(const Duration(seconds: 1));
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        }
+      } catch (e) {
+        setState(() {
+          _isSubmitting = false;
+          _errorMessage = 'Error saving profile: ${e.toString()}';
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_errorMessage ?? ''),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -298,7 +290,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
               ),
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: _isLoading ? null : _saveUserData,
+                onPressed: _isSubmitting ? null : _saveProfileAndComplete,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8B5CF6),
                   foregroundColor: Colors.white,
@@ -307,7 +299,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: _isLoading
+                child: _isSubmitting
                     ? const SizedBox(
                         width: 24,
                         height: 24,

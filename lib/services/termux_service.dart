@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 
 class TermuxService {
-  static Future<void> runCommand(BuildContext context, String command) async {
+  static Future<void> runCommand(
+    BuildContext context, 
+    String command, 
+    {Function(String)? onOutput}
+  ) async {
     try {
       print('Attempting to run command: $command');
       

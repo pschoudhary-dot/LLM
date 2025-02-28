@@ -45,24 +45,48 @@ class AuthService {
     Map<String, dynamic>? userData,
   }) async {
     try {
+      // First check if the user already exists by trying to sign in
+      try {
+        await _supabase.auth.signInWithPassword(
+          email: email,
+          password: 'dummy_check_password',
+        );
+        // If we get here, it means authentication failed but the user exists
+        throw AuthException('Email is already in use.');
+      } catch (e) {
+        // If the error is not about the user existing, continue with signup
+        if (!e.toString().contains('Invalid login credentials')) {
+          // Re-throw if it's not an invalid credentials error
+          if (e is AuthException && e.message == 'Email is already in use.') {
+            rethrow;
+          }
+        }
+      }
+      
+      // Proceed with signup
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
         data: userData,
       );
       
-      // Check if the user already exists
-      if (response.user != null && response.user!.identities != null && response.user!.identities!.isEmpty) {
-        throw AuthException('Email is already in use.');
+      // If user is null or identities is empty, throw error
+      if (response.user == null) {
+        throw AuthException('Signup failed: User is null');
       }
       
       // Create a profile for the user
       if (response.user != null) {
-        await _supabase.from('profiles').insert({
-          'id': response.user!.id,
-          'email': email,
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+        try {
+          await _supabase.from('profiles').insert({
+            'id': response.user!.id,
+            'email': email,
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+        } catch (e) {
+          print('Error creating profile: $e');
+          // Continue even if profile creation fails, we'll handle it later
+        }
       }
       
       // Store the session in secure storage
@@ -70,6 +94,7 @@ class AuthService {
       
       return response;
     } catch (e) {
+      print('Signup error: $e');
       rethrow;
     }
   }
@@ -156,6 +181,44 @@ class AuthService {
     } catch (e) {
       print('Error getting user data: $e');
       return null;
+    }
+  }
+
+  // Update user profile
+  Future<void> updateUserProfile({
+    required String userId,
+    String? fullName,
+    String? username,
+    String? bio,
+    DateTime? dateOfBirth,
+    String? profession,
+    String? heardFrom,
+    String? avatarUrl,
+    bool? surveyCompleted,
+  }) async {
+    try {
+      final Map<String, dynamic> updateData = {};
+      
+      if (fullName != null) updateData['full_name'] = fullName;
+      if (username != null) updateData['username'] = username;
+      if (bio != null) updateData['bio'] = bio;
+      if (dateOfBirth != null) updateData['date_of_birth'] = dateOfBirth.toIso8601String();
+      if (profession != null) updateData['profession'] = profession;
+      if (heardFrom != null) updateData['heard_from'] = heardFrom;
+      if (avatarUrl != null) updateData['avatar_url'] = avatarUrl;
+      if (surveyCompleted != null) updateData['survey_completed'] = surveyCompleted;
+      
+      // Always update the timestamp
+      updateData['updated_at'] = DateTime.now().toIso8601String();
+      
+      await _supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', userId)
+          .execute();
+    } catch (e) {
+      print('Error updating profile: $e');
+      rethrow;
     }
   }
 }
