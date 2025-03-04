@@ -126,6 +126,7 @@ class Message {
   final DateTime timestamp;
   bool isThinking;
   final bool isStreaming;
+  final bool isError;
   final List<SearchResult>? sources;
 
   Message({
@@ -134,6 +135,7 @@ class Message {
     required this.timestamp,
     this.isThinking = false,
     this.isStreaming = false,
+    this.isError = false,
     this.sources,
   });
 
@@ -145,6 +147,7 @@ class Message {
       'timestamp': timestamp.toIso8601String(),
       'isThinking': isThinking,
       'isStreaming': isStreaming,
+      'isError': isError,
       'sources': sources?.map((s) => s.toJson()).toList(),
     };
   }
@@ -158,6 +161,7 @@ class Message {
           : DateTime.now(),
       isThinking: json['isThinking'] ?? false,
       isStreaming: json['isStreaming'] ?? false,
+      isError: json['isError'] ?? false,
       sources: json['sources'] != null
           ? (json['sources'] as List).map((s) => SearchResult.fromJson(s as Map<String, dynamic>)).toList()
           : null,
@@ -171,6 +175,7 @@ class Message {
     DateTime? timestamp,
     bool? isThinking,
     bool? isStreaming,
+    bool? isError,
     List<SearchResult>? sources,
   }) {
     return Message(
@@ -179,6 +184,7 @@ class Message {
       timestamp: timestamp ?? this.timestamp,
       isThinking: isThinking ?? this.isThinking,
       isStreaming: isStreaming ?? this.isStreaming,
+      isError: isError ?? this.isError,
       sources: sources ?? this.sources,
     );
   }

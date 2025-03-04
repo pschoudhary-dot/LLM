@@ -76,7 +76,21 @@ class ChatService {
       return 'Error connecting to Ollama server at ${config.baseUrl}. Please make sure Ollama is running.';
     }
     
-    // Try using the chat completion API with streaming
+    final client = http.Client();
+    final completer = Completer<String>();
+    final buffer = StringBuffer();
+    StreamSubscription? subscription;
+
+    void cleanupAndComplete([String? error]) {
+      subscription?.cancel();
+      client.close();
+      if (error != null) {
+        completer.completeError(error);
+      } else if (!completer.isCompleted) {
+        completer.complete(buffer.toString());
+      }
+    }
+
     try {
       // Prepare messages with system prompt if provided
       final messages = <Map<String, String>>[];
@@ -93,10 +107,10 @@ class ChatService {
         'content': userMessage,
       });
 
-      final client = http.Client();
+      // Try the v1 API endpoint first (more standard)
       final request = http.Request(
         'POST',
-        Uri.parse('${config.baseUrl}/api/chat'),
+        Uri.parse('${config.baseUrl}/v1/chat/completions'),
       );
       
       request.headers['Content-Type'] = 'application/json';
@@ -110,97 +124,47 @@ class ChatService {
       final response = await client.send(request);
       
       if (response.statusCode == 200) {
-        final completer = Completer<String>();
-        final buffer = StringBuffer();
-        
-        response.stream
+        subscription = response.stream
           .transform(utf8.decoder)
           .transform(const LineSplitter())
           .listen(
             (line) {
-              if (line.trim().isNotEmpty) {
+              if (line.trim().isNotEmpty && line != '[DONE]') {
                 try {
                   final data = jsonDecode(line);
-                  final content = data['message']?['content'] ?? '';
-                  if (content.isNotEmpty) {
+                  String? content;
+                  
+                  // Handle different response formats
+                  if (data['choices']?[0]?['delta']?['content'] != null) {
+                    content = data['choices'][0]['delta']['content'];
+                  } else if (data['message']?['content'] != null) {
+                    content = data['message']['content'];
+                  }
+                  
+                  if (content != null && content.isNotEmpty) {
                     buffer.write(content);
                     if (stream && onToken != null) {
                       onToken(content);
                     }
                   }
                 } catch (e) {
-                  debugPrint('Error parsing streaming response: $e');
+                  debugPrint('Warning: Error parsing streaming response line: $e');
+                  // Don't throw here - continue processing other lines
                 }
               }
             },
-            onDone: () {
-              completer.complete(buffer.toString());
-            },
-            onError: (e) {
-              completer.completeError('Error streaming response: $e');
-            },
-            cancelOnError: true,
+            onDone: () => cleanupAndComplete(),
+            onError: (e) => cleanupAndComplete('Error streaming response: $e'),
+            cancelOnError: false  // Don't cancel on parsing errors
           );
-        
-        return await completer.future;
       } else {
-        // Try the v1 API endpoint
-        final v1Request = http.Request(
-          'POST',
-          Uri.parse('${config.baseUrl}/v1/chat/completions'),
-        );
-        
-        v1Request.headers['Content-Type'] = 'application/json';
-        v1Request.body = jsonEncode({
-          'model': config.id,
-          'messages': messages,
-          'stream': true,
-          'temperature': temperature,
-        });
-
-        final v1Response = await client.send(v1Request);
-        
-        if (v1Response.statusCode == 200) {
-          final completer = Completer<String>();
-          final buffer = StringBuffer();
-          
-          v1Response.stream
-            .transform(utf8.decoder)
-            .transform(const LineSplitter())
-            .listen(
-              (line) {
-                if (line.trim().isNotEmpty) {
-                  try {
-                    final data = jsonDecode(line);
-                    final content = data['choices']?[0]?['delta']?['content'] ?? '';
-                    if (content.isNotEmpty) {
-                      buffer.write(content);
-                      if (stream && onToken != null) {
-                        onToken(content);
-                      }
-                    }
-                  } catch (e) {
-                    debugPrint('Error parsing streaming response: $e');
-                  }
-                }
-              },
-              onDone: () {
-                completer.complete(buffer.toString());
-              },
-              onError: (e) {
-                completer.completeError('Error streaming response: $e');
-              },
-              cancelOnError: true,
-            );
-          
-          return await completer.future;
-        } else {
-          throw Exception('Failed to get response from Ollama: ${v1Response.statusCode}');
-        }
+        cleanupAndComplete('Failed to get response: ${response.statusCode}');
       }
+
+      return await completer.future;
     } catch (e) {
-      debugPrint('Error with Ollama API: $e');
-      throw Exception('Error communicating with Ollama: $e');
+      cleanupAndComplete('Error in Ollama response: $e');
+      rethrow;
     }
   }
   
@@ -376,134 +340,101 @@ class ChatService {
   ) async {
     try {
       final client = http.Client();
-      final request = http.Request(
-        'POST',
-        Uri.parse('${config.baseUrl}/chat/completions'),
-      );
-      
-      final messages = [
-        {'role': 'user', 'content': userMessage}
-      ];
-      
-      final temperature = config.additionalParams?['temperature'] ?? 0.7;
-      
-      request.headers['Content-Type'] = 'application/json';
-      request.body = jsonEncode({
-        'model': config.id,
-        'messages': messages,
-        'stream': true,
-        'temperature': temperature,
-      });
+      final completer = Completer<String>();
+      final buffer = StringBuffer();
+      StreamSubscription? subscription;
 
-      final response = await client.send(request);
-      
-      if (response.statusCode == 200) {
-        final completer = Completer<String>();
-        final buffer = StringBuffer();
+      void cleanupAndComplete([String? error]) {
+        subscription?.cancel();
+        client.close();
+        if (error != null) {
+          completer.completeError(error);
+        } else if (!completer.isCompleted) {
+          completer.complete(buffer.toString());
+        }
+      }
+
+      try {
+        final messages = [
+          {'role': 'user', 'content': userMessage}
+        ];
         
-        response.stream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(
-            (line) {
-              if (line.trim().isNotEmpty) {
-                try {
-                  // Handle "data: " prefix in SSE
-                  String jsonStr = line;
-                  if (line.startsWith('data: ')) {
-                    jsonStr = line.substring(6);
-                  }
-                  
-                  // Skip "[DONE]" message
-                  if (jsonStr.trim() == '[DONE]') {
-                    return;
-                  }
-                  
-                  final data = jsonDecode(jsonStr);
-                  final content = data['message']?['content'] ?? 
-                                 data['choices']?[0]?['delta']?['content'] ?? 
-                                 data['choices']?[0]?['message']?['content'] ?? '';
-                                 
-                  if (content.isNotEmpty) {
-                    buffer.write(content);
-                    if (stream && onToken != null) {
-                      onToken(content);
-                    }
-                  }
-                } catch (e) {
-                  debugPrint('Error parsing streaming response: $e');
-                  debugPrint('Line: $line');
-                }
-              }
-            },
-            onDone: () {
-              completer.complete(buffer.toString());
-            },
-            onError: (e) {
-              completer.completeError('Error streaming response: $e');
-            },
-            cancelOnError: true,
-          );
+        final temperature = config.additionalParams?['temperature'] ?? 0.7;
         
-        return await completer.future;
-      } else {
-        // Try the v1 API endpoint
-        final v1Request = http.Request(
+        final request = http.Request(
           'POST',
-          Uri.parse('${config.baseUrl}/v1/chat/completions'),
+          Uri.parse('${config.baseUrl}/chat/completions'),
         );
         
-        v1Request.headers['Content-Type'] = 'application/json';
-        v1Request.body = jsonEncode({
+        request.headers['Content-Type'] = 'application/json';
+        request.body = jsonEncode({
           'model': config.id,
           'messages': messages,
           'stream': true,
           'temperature': temperature,
         });
 
-        final v1Response = await client.send(v1Request);
+        final response = await client.send(request);
         
-        if (v1Response.statusCode == 200) {
-          final completer = Completer<String>();
-          final buffer = StringBuffer();
-          
-          v1Response.stream
+        if (response.statusCode == 200) {
+          subscription = response.stream
             .transform(utf8.decoder)
             .transform(const LineSplitter())
             .listen(
               (line) {
                 if (line.trim().isNotEmpty) {
                   try {
-                    final data = jsonDecode(line);
-                    final content = data['choices']?[0]?['delta']?['content'] ?? '';
-                    if (content.isNotEmpty) {
+                    // Handle "data: " prefix in SSE
+                    String jsonStr = line;
+                    if (line.startsWith('data: ')) {
+                      jsonStr = line.substring(6);
+                    }
+                    
+                    // Skip "[DONE]" message
+                    if (jsonStr.trim() == '[DONE]') {
+                      return;
+                    }
+                    
+                    final data = jsonDecode(jsonStr);
+                    String? content;
+                    
+                    // Handle different response formats
+                    if (data['message']?['content'] != null) {
+                      content = data['message']['content'];
+                    } else if (data['choices']?[0]?['delta']?['content'] != null) {
+                      content = data['choices'][0]['delta']['content'];
+                    } else if (data['choices']?[0]?['message']?['content'] != null) {
+                      content = data['choices'][0]['message']['content'];
+                    }
+                    
+                    if (content != null && content.isNotEmpty) {
                       buffer.write(content);
                       if (stream && onToken != null) {
                         onToken(content);
                       }
                     }
                   } catch (e) {
-                    debugPrint('Error parsing streaming response: $e');
+                    debugPrint('Warning: Error parsing streaming response line: $e');
+                    // Don't throw here - continue processing other lines
                   }
                 }
               },
-              onDone: () {
-                completer.complete(buffer.toString());
-              },
-              onError: (e) {
-                completer.completeError('Error streaming response: $e');
-              },
-              cancelOnError: true,
+              onDone: () => cleanupAndComplete(),
+              onError: (e) => cleanupAndComplete('Error streaming response: $e'),
+              cancelOnError: false  // Don't cancel on parsing errors
             );
-          
-          return await completer.future;
         } else {
-          throw Exception('Failed to get response from PocketLLM: ${v1Response.statusCode}');
+          cleanupAndComplete('Failed to get response: ${response.statusCode}');
         }
+
+        return await completer.future;
+      } catch (e) {
+        cleanupAndComplete('Error in PocketLLM response: $e');
+        rethrow;
       }
     } catch (e) {
-      debugPrint('Error getting PocketLLM response: $e');
-      return 'Error connecting to PocketLLM: $e';
+      debugPrint('Error getting response: $e');
+      throw Exception('Error connecting to service: $e');
     }
   }
 

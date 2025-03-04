@@ -141,33 +141,22 @@ class _ChatInterfaceState extends State<ChatInterface> {
     _scrollToBottom();
     _saveChatHistory();
 
+    String fullResponse = '';
     try {
-      // Create a StreamController to handle the streaming response
-      final streamController = StreamController<String>();
+      // Add timeout for the response
+      const timeout = Duration(seconds: 120); // Increased timeout
       
-      // Start a stream to receive the response
-      ChatService.getModelResponse(message, stream: true, 
+      fullResponse = await ChatService.getModelResponse(
+        message,
+        stream: true,
         onToken: (token) {
-          streamController.add(token);
-        }
-      ).then((fullResponse) {
-        // Complete the stream when the full response is received
-        streamController.close();
-      }).catchError((error) {
-        streamController.addError(error);
-        streamController.close();
-      });
-      
-      // Listen to the stream and update the AI message
-      String accumulatedResponse = '';
-      streamController.stream.listen(
-        (token) {
-          accumulatedResponse += token;
+          if (!mounted) return;
+          
           setState(() {
             final index = _messages.indexOf(aiMessage);
             if (index != -1) {
               _messages[index] = Message(
-                content: accumulatedResponse,
+                content: _messages[index].content + token,
                 isUser: false,
                 isThinking: false,
                 isStreaming: true,
@@ -177,92 +166,60 @@ class _ChatInterfaceState extends State<ChatInterface> {
           });
           _scrollToBottom();
         },
-        onDone: () {
-          setState(() {
-            _isLoading = false;
-            final index = _messages.indexOf(aiMessage);
-            if (index != -1) {
-              _messages[index] = Message(
-                content: accumulatedResponse,
-                isUser: false,
-                isThinking: false,
-                isStreaming: false,
-                timestamp: aiMessage.timestamp,
-              );
-            }
-          });
-          _saveChatHistory();
-          _scrollToBottom();
-          // If online, perform web search
-          if (_isOnline) {
-            _performWebSearch(message).then((searchResults) {
-              if (searchResults.containsKey('results')) {
-                String formattedResults = "\n\n**Web Search Results:**\n\n";
-                
-                final results = searchResults['results'] as List;
-                for (var result in results) {
-                  final title = result['title'] ?? 'No title';
-                  final url = result['url'] ?? '';
-                  final content = result['content'] ?? 'No content';
-                  
-                  formattedResults += "**$title**\n";
-                  formattedResults += "   $url\n";
-                  formattedResults += "   ${content.substring(0, min(150, content.length as int))}...\n\n";
-                }
-                
-                if (searchResults.containsKey('answer')) {
-                  formattedResults += "**Summary:** ${searchResults['answer']}\n\n";
-                }
-                
-                setState(() {
-                  final index = _messages.indexOf(aiMessage);
-                  if (index != -1) {
-                    _messages[index] = Message(
-                      content: accumulatedResponse + formattedResults,
-                      isUser: false,
-                      isThinking: false,
-                      timestamp: aiMessage.timestamp,
-                    );
-                  }
-                });
-                _saveChatHistory();
-                _scrollToBottom();
-              }
-            }).catchError((e) {
-              print('Error performing web search: $e');
-            });
-          }
-        },
-        onError: (error) {
-          setState(() {
-            _isLoading = false;
-            final index = _messages.indexOf(aiMessage);
-            if (index != -1) {
-              _messages[index] = Message(
-                content: "Error: $error",
-                isUser: false,
-                isThinking: false,
-                timestamp: aiMessage.timestamp,
-              );
-            }
-          });
-          _saveChatHistory();
+      ).timeout(
+        timeout,
+        onTimeout: () {
+          throw TimeoutException('Response timed out. Please try regenerating the response.');
         },
       );
+
+      // Only update if the response is not empty and we're still mounted
+      if (mounted && fullResponse.isNotEmpty) {
+        setState(() {
+          final index = _messages.indexOf(aiMessage);
+          if (index != -1) {
+            _messages[index] = Message(
+              content: fullResponse,
+              isUser: false,
+              isThinking: false,
+              isStreaming: false,
+              timestamp: aiMessage.timestamp,
+            );
+          }
+          _isLoading = false;
+        });
+
+        _saveChatHistory();
+        _scrollToBottom();
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        final index = _messages.indexOf(aiMessage);
-        if (index != -1) {
-          _messages[index] = Message(
-            content: "Error: $e",
-            isUser: false,
-            isThinking: false,
-            timestamp: aiMessage.timestamp,
-          );
-        }
-      });
-      _saveChatHistory();
+      if (mounted) {
+        setState(() {
+          final index = _messages.indexOf(aiMessage);
+          if (index != -1) {
+            _messages[index] = Message(
+              content: e.toString(),
+              isUser: false,
+              isThinking: false,
+              isError: true,
+              timestamp: aiMessage.timestamp,
+            );
+          }
+          _isLoading = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    // If online, perform web search
+    if (_isOnline) {
+      _performWebSearch(message);
     }
   }
 
@@ -567,7 +524,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                         ),
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        backgroundColor: Colors.white,
+                        backgroundColor: const Color.fromARGB(255, 0, 0, 0),
                         elevation: 4,
                       );
                       ScaffoldMessenger.of(context).showSnackBar(snackBar);
@@ -660,12 +617,19 @@ class _ChatInterfaceState extends State<ChatInterface> {
             mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             children: [
               if (!message.isUser)
-                const Padding(
-                  padding: EdgeInsets.only(right: 8.0, top: 4.0),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0, top: 4.0),
                   child: CircleAvatar(
-                    backgroundColor: Color(0xFF8B5CF6),
+                    backgroundColor: const Color(0xFF8B5CF6),
                     radius: 16,
-                    child: Icon(Icons.smart_toy, color: Colors.white, size: 18),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/icons/logo2.png',
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
                 ),
               Flexible(

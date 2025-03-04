@@ -127,60 +127,42 @@ class _AuthPageState extends State<AuthPage> {
         _isLoading = true;
       });
       
-      try {
-        final response = await _authService.signUp(
-          email: _emailController.text,
-          password: _passwordController.text,
+      final response = await _authService.signUp(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+      
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+      
+      if (response.user != null) {
+        // Clear any previous error messages
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).clearSnackBars();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully! Complete your profile to get started.'),
+            backgroundColor: Color(0xFF8B5CF6),
+            duration: Duration(seconds: 3),
+          ),
         );
         
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
-        
-        if (response.user != null) {
-          // Navigate to user survey page
-          if (!mounted) return;
-          
-          // Clear any previous error messages
-          ScaffoldMessenger.of(context).clearSnackBars();
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Account created successfully! Complete your profile to get started.'),
-              backgroundColor: Color(0xFF8B5CF6),
-              duration: Duration(seconds: 3),
+        // Navigate to user survey page using pushAndRemoveUntil to clear the stack
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => UserSurveyPage(
+              userId: response.user!.id,
+              onComplete: () {
+                widget.onLoginSuccess(_emailController.text);
+              },
             ),
-          );
-          
-          // Use pushReplacement to avoid navigation stack issues
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => UserSurveyPage(
-                userId: response.user!.id,
-                onComplete: () {
-                  // This will be called after the user survey is completed
-                  widget.onLoginSuccess(_emailController.text);
-                },
-              ),
-            ),
-          );
-        }
-      } catch (e) {
-        setState(() {
-          _isLoading = false;
-        });
-        
-        if (e.toString().toLowerCase().contains('email is already in use')) {
-          _showErrorSnackBar('This email is already registered. Please login instead.');
-          setState(() {
-            _emailExists = true;
-            _showSignupFields = false;
-          });
-        } else {
-          _showErrorSnackBar('Signup failed: ${e.toString()}');
-        }
+          ),
+          (route) => false, // This will remove all previous routes
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -188,7 +170,15 @@ class _AuthPageState extends State<AuthPage> {
         _isLoading = false;
       });
       
-      _showErrorSnackBar('Signup failed: ${e.toString()}');
+      if (e.toString().toLowerCase().contains('email is already in use')) {
+        _showErrorSnackBar('This email is already registered. Please login instead.');
+        setState(() {
+          _emailExists = true;
+          _showSignupFields = false;
+        });
+      } else {
+        _showErrorSnackBar('Signup failed: ${e.toString()}');
+      }
     }
   }
 

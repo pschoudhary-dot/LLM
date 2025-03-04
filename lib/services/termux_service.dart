@@ -3,6 +3,33 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 
 class TermuxService {
+  static Future<void> launchTermux() async {
+    try {
+      const String termuxPackageName = 'com.termux';
+      if (Platform.isAndroid) {
+        final Uri uri = Uri.parse('termux://');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        } else {
+          // If can't launch directly, try to open in Play Store
+          final Uri playStoreUri = Uri.parse(
+            'market://details?id=$termuxPackageName',
+          );
+          if (await canLaunchUrl(playStoreUri)) {
+            await launchUrl(playStoreUri);
+          } else {
+            throw Exception('Could not launch Termux or Play Store');
+          }
+        }
+      } else {
+        throw Exception('Termux is only available on Android');
+      }
+    } catch (e) {
+      debugPrint('Error launching Termux: $e');
+      rethrow;
+    }
+  }
+
   static Future<void> runCommand(
     BuildContext context, 
     String command, 

@@ -14,24 +14,22 @@ class AuthService {
   // Check if an email exists in the system
   Future<bool> checkEmailExists(String email) async {
     try {
-      // Try to sign up with a dummy password to check if the email exists
-      final response = await _supabase.auth.signUp(
+      final response = await _supabase.auth.signInWithPassword(
         email: email,
-        password: 'check_only_password',
+        password: 'dummy_password_for_check',
       );
-      
-      // If identities array is empty, the email already exists
-      if (response.user != null && response.user!.identities != null && response.user!.identities!.isEmpty) {
-        return true; // Email exists
-      } else {
-        return false; // Email doesn't exist
-      }
+      // If we get here without an error, the email exists
+      return true;
     } catch (e) {
-      // If we get an error about email already in use, it exists
       final errorMessage = e.toString().toLowerCase();
-      if (errorMessage.contains('email already in use') || 
-          errorMessage.contains('user already registered')) {
+      if (errorMessage.contains('invalid login credentials')) {
+        // Invalid credentials means the email exists but password was wrong
         return true;
+      }
+      if (errorMessage.contains('email not confirmed') || 
+          errorMessage.contains('user not found')) {
+        // Email doesn't exist
+        return false;
       }
       // For any other error, assume the email doesn't exist
       return false;
@@ -45,22 +43,10 @@ class AuthService {
     Map<String, dynamic>? userData,
   }) async {
     try {
-      // First check if the user already exists by trying to sign in
-      try {
-        await _supabase.auth.signInWithPassword(
-          email: email,
-          password: 'dummy_check_password',
-        );
-        // If we get here, it means authentication failed but the user exists
+      // First check if the email exists
+      final exists = await checkEmailExists(email);
+      if (exists) {
         throw AuthException('Email is already in use.');
-      } catch (e) {
-        // If the error is not about the user existing, continue with signup
-        if (!e.toString().contains('Invalid login credentials')) {
-          // Re-throw if it's not an invalid credentials error
-          if (e is AuthException && e.message == 'Email is already in use.') {
-            rethrow;
-          }
-        }
       }
       
       // Proceed with signup
@@ -70,23 +56,22 @@ class AuthService {
         data: userData,
       );
       
-      // If user is null or identities is empty, throw error
+      // If user is null, throw error
       if (response.user == null) {
         throw AuthException('Signup failed: User is null');
       }
       
       // Create a profile for the user
-      if (response.user != null) {
-        try {
-          await _supabase.from('profiles').insert({
-            'id': response.user!.id,
-            'email': email,
-            'updated_at': DateTime.now().toIso8601String(),
-          });
-        } catch (e) {
-          print('Error creating profile: $e');
-          // Continue even if profile creation fails, we'll handle it later
-        }
+      try {
+        await _supabase.from('profiles').insert({
+          'id': response.user!.id,
+          'email': email,
+          'updated_at': DateTime.now().toIso8601String(),
+          'survey_completed': false,
+        }).execute();
+      } catch (e) {
+        print('Error creating profile: $e');
+        // Continue even if profile creation fails, we'll handle it later
       }
       
       // Store the session in secure storage

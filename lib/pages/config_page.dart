@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:system_info2/system_info2.dart';
 import 'package:llm/services/termux_service.dart';
+import 'docs_page.dart';
 
 class ConfigPage extends StatefulWidget {
   final String appName;
@@ -71,13 +72,35 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _checkTermux() async {
     try {
-      final directory = Directory('/storage/emulated/0/Android/data/com.termux');
-      final termuxExists = await directory.exists();
-      final appDirectory = Directory('/data/data/com.termux');
-      final appExists = await appDirectory.exists();
+      // Define possible Termux installation paths
+      final List<String> possiblePaths = [
+        '/data/data/com.termux',
+        '/storage/emulated/0/Android/data/com.termux',
+        '/storage/emulated/0/Android/obb/com.termux',
+      ];
+      
+      bool found = false;
+      
+      // Check if any of the directories exist
+      for (final path in possiblePaths) {
+        final directory = Directory(path);
+        if (await directory.exists()) {
+          found = true;
+          break;
+        }
+      }
+      
+      // Try to check if the package is installed using canLaunchUrl
+      try {
+        final termuxPackageUrl = Uri.parse('package:com.termux');
+        final canLaunch = await canLaunchUrl(termuxPackageUrl);
+        found = found || canLaunch;
+      } catch (e) {
+        print("Error checking package URL: $e");
+      }
 
       setState(() {
-        isTermuxInstalled = termuxExists || appExists;
+        isTermuxInstalled = found;
         isLoading = false;
       });
     } catch (e) {
@@ -148,10 +171,10 @@ class _ConfigPageState extends State<ConfigPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('System Configuration'),
+        title: const Text('System Configuration'),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
             onPressed: () {
               setState(() {
                 isLoading = true;
@@ -164,8 +187,8 @@ class _ConfigPageState extends State<ConfigPage> {
         ],
         elevation: 0,
         backgroundColor: Colors.white,
-        iconTheme: IconThemeData(color: Colors.black),
-        titleTextStyle: TextStyle(
+        iconTheme: const IconThemeData(color: Colors.black),
+        titleTextStyle: const TextStyle(
           color: Colors.black,
           fontSize: 20,
           fontWeight: FontWeight.w500,
@@ -173,7 +196,7 @@ class _ConfigPageState extends State<ConfigPage> {
       ),
       backgroundColor: Colors.grey[50],
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,7 +220,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Widget _buildStorageSection() {
     return Container(
-      margin: EdgeInsets.all(16),
+      margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -205,14 +228,14 @@ class _ConfigPageState extends State<ConfigPage> {
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          const Padding(
             padding: EdgeInsets.all(16),
             child: Row(
               children: [
@@ -228,7 +251,7 @@ class _ConfigPageState extends State<ConfigPage> {
               ],
             ),
           ),
-          Divider(height: 1),
+          const Divider(height: 1),
           ...storageInfo.entries.map((entry) => _buildStorageItem(
             entry.key,
             entry.value,
@@ -253,7 +276,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Widget _buildStorageItem(String label, String value, double percentage) {
     return Padding(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -265,7 +288,7 @@ class _ConfigPageState extends State<ConfigPage> {
               fontWeight: FontWeight.w500,
             ),
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
@@ -275,7 +298,7 @@ class _ConfigPageState extends State<ConfigPage> {
               minHeight: 6,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
@@ -290,7 +313,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Widget _buildMemorySection() {
     return Container(
-      margin: EdgeInsets.all(16),
+      margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -298,14 +321,14 @@ class _ConfigPageState extends State<ConfigPage> {
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          const Padding(
             padding: EdgeInsets.all(16),
             child: Text(
               'Memory Information',
@@ -315,9 +338,9 @@ class _ConfigPageState extends State<ConfigPage> {
               ),
             ),
           ),
-          Divider(height: 1),
+          const Divider(height: 1),
           Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -325,14 +348,14 @@ class _ConfigPageState extends State<ConfigPage> {
                   child: Column(
                     children: [
                       _buildMemoryRow('Total RAM', '12 GB'),
-                      SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       _buildMemoryRow('Available RAM', '4.8 GB'),
-                      SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       _buildMemoryRow('Running Processes', '142'),
                     ],
                   ),
                 ),
-                SizedBox(width: 24),
+                const SizedBox(width: 24),
                 SizedBox(
                   width: 80,
                   height: 80,
@@ -362,7 +385,7 @@ class _ConfigPageState extends State<ConfigPage> {
         ),
         Text(
           value,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
@@ -373,7 +396,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Widget _buildSection(String title, List<Widget> children) {
     return Container(
-      margin: EdgeInsets.all(16),
+      margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -381,7 +404,7 @@ class _ConfigPageState extends State<ConfigPage> {
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -389,16 +412,16 @@ class _ConfigPageState extends State<ConfigPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Text(
               title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          Divider(height: 1),
+          const Divider(height: 1),
           ...children,
         ],
       ),
@@ -407,7 +430,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -420,7 +443,7 @@ class _ConfigPageState extends State<ConfigPage> {
           ),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
@@ -432,7 +455,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Widget _buildTermuxSection() {
     return Container(
-      margin: EdgeInsets.all(16),
+      margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -440,7 +463,7 @@ class _ConfigPageState extends State<ConfigPage> {
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -448,7 +471,7 @@ class _ConfigPageState extends State<ConfigPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
                 Icon(
@@ -456,24 +479,130 @@ class _ConfigPageState extends State<ConfigPage> {
                   color: Colors.purple[600],
                   size: 24,
                 ),
-                SizedBox(width: 12),
-                Text(
+                const SizedBox(width: 12),
+                const Text(
                   'Termux',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Spacer(),
-                TextButton(
-                  onPressed: _launchTermuxDownload,
-                  child: Text(
-                    'Install Now',
-                    style: TextStyle(
-                      color: Colors.purple[600],
-                      fontWeight: FontWeight.w500,
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isTermuxInstalled ? Colors.green[50] : Colors.red[50],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isTermuxInstalled ? Colors.green : Colors.red,
+                      width: 1,
                     ),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isTermuxInstalled ? Icons.check_circle : Icons.error,
+                        color: isTermuxInstalled ? Colors.green : Colors.red,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isTermuxInstalled ? 'Installed' : 'Not Installed',
+                        style: TextStyle(
+                          color: isTermuxInstalled ? Colors.green[700] : Colors.red[700],
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Termux Status',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isTermuxInstalled
+                      ? 'Termux is installed on your device. You can use it to run Linux commands and tools.'
+                      : 'Termux is not installed on your device. Install it to access powerful command-line tools and Linux utilities.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: isTermuxInstalled
+                            ? _launchTermux
+                            : _launchTermuxDownload,
+                        icon: Icon(
+                          isTermuxInstalled ? Icons.launch : Icons.download,
+                          color: Colors.white,
+                        ),
+                        label: Text(
+                          isTermuxInstalled ? 'Open Termux' : 'Install Termux',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple[600],
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (isTermuxInstalled) ...[  
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          // Navigate to the docs page instead of showing a simple dialog
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const DocsPage(),
+                            ),
+                          );
+                        },
+                        icon: Icon(
+                          Icons.help_outline,
+                          color: Colors.purple[600],
+                        ),
+                        label: Text(
+                          'Setup Guide',
+                          style: TextStyle(color: Colors.purple[600]),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          side: BorderSide(color: Colors.purple[600]!),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -487,6 +616,17 @@ class _ConfigPageState extends State<ConfigPage> {
     final Uri url = Uri.parse('https://f-droid.org/en/packages/com.termux/');
     if (!await launchUrl(url)) {
       throw Exception('Could not launch $url');
+    }
+  }
+
+  Future<void> _launchTermux() async {
+    try {
+      await TermuxService.launchTermux();
+    } catch (e) {
+      print("Error launching Termux: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to launch Termux')),
+      );
     }
   }
 }

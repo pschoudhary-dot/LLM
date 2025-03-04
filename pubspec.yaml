@@ -92,7 +92,10 @@ flutter:
     - assets/SizeSmall.svg
     - assets/google.png
     - assets/icons/icon.jpg
-    - assets/icons/
+    - assets/icons/logo.png
+    - assets/icons/logo2.png
+
+
   # assets:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
