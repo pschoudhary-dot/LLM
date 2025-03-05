@@ -37,7 +37,6 @@ class _LibraryPageState extends State<LibraryPage> with TickerProviderStateMixin
       length: 2,
       vsync: this,
     );
-    _fetchOllamaModels();
     _fetchDownloadedModels();
     _loadAvailableOllamaModels();
   }
@@ -62,63 +61,12 @@ class _LibraryPageState extends State<LibraryPage> with TickerProviderStateMixin
     }
   }
 
-  Future<void> _fetchOllamaModels() async {
-    setState(() => _isLoading = true);
-    try {
-      // Fetch models from Ollama library
-      final response = await http.get(Uri.parse('https://ollama.com/api/library'));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _ollamaModels = List<Map<String, dynamic>>.from(data['models'] ?? []);
-          _isLoading = false;
-        });
-      } else {
-        throw Exception('Failed to load models');
-      }
-    } catch (e) {
-      print('Error fetching models: $e');
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _loadAvailableOllamaModels() async {
+  void _loadAvailableOllamaModels() {
     setState(() {
       _isLoading = true;
+      _availableOllamaModels = OllamaModel.getAllModels();
+      _isLoading = false;
     });
-    
-    try {
-      final response = await http.get(Uri.parse('https://ollama.com/api/library'));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['models'] != null) {
-          setState(() {
-            _availableOllamaModels = List<OllamaModel>.from(data['models'].map((model) => OllamaModel.fromJson(model)));
-            _isLoading = false;
-          });
-        } else {
-          throw Exception('No models found in API response');
-        }
-      } else {
-        throw Exception('Failed to load models from API');
-      }
-    } catch (e) {
-      print('Error loading available Ollama models: $e');
-      // Fallback to popular models if API fails
-      setState(() {
-        _availableOllamaModels = OllamaModel.getPopularModels();
-        _isLoading = false;
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Using cached model list. Could not connect to Ollama API.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    }
   }
 
   void _showFilterOptions() {
@@ -396,7 +344,6 @@ class _LibraryPageState extends State<LibraryPage> with TickerProviderStateMixin
           IconButton(
             icon: Icon(Icons.refresh, color: Colors.black),
             onPressed: () {
-              _fetchOllamaModels();
               _fetchDownloadedModels();
             },
           ),

@@ -26,10 +26,9 @@ class ChatInterface extends StatefulWidget {
 }
 
 class _ChatInterfaceState extends State<ChatInterface> {
-  // Add these new state variables at the top of the class
   bool _showAttachmentOptions = false;
   final double _inputHeight = 56.0;
-  final double _maxInputHeight = 120.0;  // Maximum height for input area
+  final double _maxInputHeight = 120.0;
   final TextEditingController _messageController = TextEditingController();
   final List<Message> _messages = [];
   
@@ -42,7 +41,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
   service.ModelConfig? _selectedModelConfig;
   List<service.ModelConfig> _modelConfigs = [];
   bool _isStreaming = false;
-  String _currentStreamedResponse = '';
+  String _currentStreamingResponse = '';
   String _currentThought = '';
   bool _isTyping = false;
   
@@ -95,131 +94,59 @@ class _ChatInterfaceState extends State<ChatInterface> {
     _scrollToBottom();
   }
 
-  void _sendMessage() async {
+  Future<void> _sendMessage() async {
     final message = _messageController.text.trim();
     if (message.isEmpty) return;
 
-    // Check if a model is selected
-    if (_selectedModelId == null || _selectedModelConfig == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please select a model in the app bar first'),
-          action: SnackBarAction(
-            label: 'Settings',
-            onPressed: () {
-              Navigator.pushNamed(context, '/settings');
-            },
-          ),
-        ),
-      );
-      return;
-    }
-
-    // Add user message
-    final userMessage = Message(
-      content: message,
-      isUser: true,
-      timestamp: DateTime.now(),
-    );
-
-    // Create a placeholder for AI response
-    final aiMessage = Message(
-      content: '',
-      isUser: false,
-      isThinking: true,
-      timestamp: DateTime.now(),
-    );
-
     setState(() {
-      _messages.add(userMessage);
-      _messages.add(aiMessage);
+      _messages.add(Message(
+        content: message,
+        isUser: true,
+        timestamp: DateTime.now(),
+      ));
       _messageController.clear();
-      _isTyping = false;
       _isLoading = true;
+      _currentStreamingResponse = '';
     });
 
-    _scrollToBottom();
-    _saveChatHistory();
-
-    String fullResponse = '';
     try {
-      // Add timeout for the response
-      const timeout = Duration(seconds: 120); // Increased timeout
-      
-      fullResponse = await ChatService.getModelResponse(
+      final response = await ChatService.getModelResponse(
         message,
         stream: true,
         onToken: (token) {
-          if (!mounted) return;
-          
           setState(() {
-            final index = _messages.indexOf(aiMessage);
-            if (index != -1) {
-              _messages[index] = Message(
-                content: _messages[index].content + token,
+            _currentStreamingResponse += token;
+            // Update the last message if it's the model's response
+            if (_messages.isNotEmpty && !_messages.last.isUser) {
+              _messages.last.content = _currentStreamingResponse;
+            } else {
+              _messages.add(Message(
+                content: _currentStreamingResponse,
                 isUser: false,
-                isThinking: false,
-                isStreaming: true,
-                timestamp: aiMessage.timestamp,
-              );
+                timestamp: DateTime.now(),
+              ));
             }
           });
-          _scrollToBottom();
-        },
-      ).timeout(
-        timeout,
-        onTimeout: () {
-          throw TimeoutException('Response timed out. Please try regenerating the response.');
         },
       );
 
-      // Only update if the response is not empty and we're still mounted
-      if (mounted && fullResponse.isNotEmpty) {
-        setState(() {
-          final index = _messages.indexOf(aiMessage);
-          if (index != -1) {
-            _messages[index] = Message(
-              content: fullResponse,
-              isUser: false,
-              isThinking: false,
-              isStreaming: false,
-              timestamp: aiMessage.timestamp,
-            );
-          }
-          _isLoading = false;
-        });
-
-        _saveChatHistory();
-        _scrollToBottom();
-      }
+      setState(() {
+        _isLoading = false;
+        // Ensure the final response is set
+        if (_messages.isNotEmpty && !_messages.last.isUser) {
+          _messages.last.content = response;
+        }
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          final index = _messages.indexOf(aiMessage);
-          if (index != -1) {
-            _messages[index] = Message(
-              content: e.toString(),
-              isUser: false,
-              isThinking: false,
-              isError: true,
-              timestamp: aiMessage.timestamp,
-            );
-          }
-          _isLoading = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-
-    // If online, perform web search
-    if (_isOnline) {
-      _performWebSearch(message);
+      setState(() {
+        _isLoading = false;
+        _messages.add(Message(
+          content: 'Error: $e',
+          isUser: false,
+          timestamp: DateTime.now(),
+          isError: true,
+        ));
+      });
     }
   }
 
@@ -624,7 +551,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                     radius: 16,
                     child: ClipOval(
                       child: Image.asset(
-                        'assets/icons/logo2.png',
+                        'assets/icons/logo.png',
                         width: 32,
                         height: 32,
                         fit: BoxFit.cover,

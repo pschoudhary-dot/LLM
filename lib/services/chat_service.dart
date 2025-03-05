@@ -75,50 +75,25 @@ class ChatService {
       debugPrint('Error checking Ollama models: $e');
       return 'Error connecting to Ollama server at ${config.baseUrl}. Please make sure Ollama is running.';
     }
-    
+
     final client = http.Client();
     final completer = Completer<String>();
     final buffer = StringBuffer();
     StreamSubscription? subscription;
 
-    void cleanupAndComplete([String? error]) {
-      subscription?.cancel();
-      client.close();
-      if (error != null) {
-        completer.completeError(error);
-      } else if (!completer.isCompleted) {
-        completer.complete(buffer.toString());
-      }
-    }
-
     try {
-      // Prepare messages with system prompt if provided
-      final messages = <Map<String, String>>[];
-      
-      if (systemPrompt.isNotEmpty) {
-        messages.add({
-          'role': 'system',
-          'content': systemPrompt,
-        });
-      }
-      
-      messages.add({
-        'role': 'user',
-        'content': userMessage,
-      });
-
-      // Try the v1 API endpoint first (more standard)
       final request = http.Request(
         'POST',
-        Uri.parse('${config.baseUrl}/v1/chat/completions'),
+        Uri.parse('$baseUrl/api/generate'),
       );
       
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode({
         'model': config.id,
-        'messages': messages,
+        'prompt': userMessage,
         'stream': true,
         'temperature': temperature,
+        'system': systemPrompt,
       });
 
       final response = await client.send(request);
@@ -129,17 +104,10 @@ class ChatService {
           .transform(const LineSplitter())
           .listen(
             (line) {
-              if (line.trim().isNotEmpty && line != '[DONE]') {
+              if (line.trim().isNotEmpty) {
                 try {
                   final data = jsonDecode(line);
-                  String? content;
-                  
-                  // Handle different response formats
-                  if (data['choices']?[0]?['delta']?['content'] != null) {
-                    content = data['choices'][0]['delta']['content'];
-                  } else if (data['message']?['content'] != null) {
-                    content = data['message']['content'];
-                  }
+                  final content = data['response'] as String?;
                   
                   if (content != null && content.isNotEmpty) {
                     buffer.write(content);
@@ -147,23 +115,42 @@ class ChatService {
                       onToken(content);
                     }
                   }
+
+                  if (data['done'] == true) {
+                    completer.complete(buffer.toString());
+                    subscription?.cancel();
+                    client.close();
+                  }
                 } catch (e) {
-                  debugPrint('Warning: Error parsing streaming response line: $e');
-                  // Don't throw here - continue processing other lines
+                  debugPrint('Warning: Error parsing streaming response line: $e\nLine: $line');
                 }
               }
             },
-            onDone: () => cleanupAndComplete(),
-            onError: (e) => cleanupAndComplete('Error streaming response: $e'),
-            cancelOnError: false  // Don't cancel on parsing errors
+            onDone: () {
+              if (!completer.isCompleted) {
+                completer.complete(buffer.toString());
+              }
+              subscription?.cancel();
+              client.close();
+            },
+            onError: (e) {
+              if (!completer.isCompleted) {
+                completer.completeError('Error streaming response: $e');
+              }
+              subscription?.cancel();
+              client.close();
+            },
+            cancelOnError: false
           );
       } else {
-        cleanupAndComplete('Failed to get response: ${response.statusCode}');
+        client.close();
+        throw Exception('Failed to get response: ${response.statusCode}');
       }
 
       return await completer.future;
     } catch (e) {
-      cleanupAndComplete('Error in Ollama response: $e');
+      client.close();
+      debugPrint('Error in Ollama response: $e');
       rethrow;
     }
   }
@@ -203,26 +190,127 @@ class ChatService {
         'content': userMessage,
       });
       
-      final response = await http.post(
-        Uri.parse('${config.baseUrl}/chat/completions'),
-        headers: {
-          'Authorization': 'Bearer ${config.apiKey}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'model': config.id,
-          'messages': messages,
-          'stream': stream,
-          'temperature': temperature,
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'];
+      // Handle streaming response if requested
+      if (stream && onToken != null) {
+        final client = http.Client();
+        final completer = Completer<String>();
+        final buffer = StringBuffer();
+        StreamSubscription? subscription;
+        
+        void cleanupAndComplete([String? error]) {
+          subscription?.cancel();
+          client.close();
+          if (error != null && !completer.isCompleted) {
+            completer.completeError(error);
+          } else if (!completer.isCompleted) {
+            completer.complete(buffer.toString());
+          }
+        }
+        
+        try {
+          final request = http.Request(
+            'POST',
+            Uri.parse('${config.baseUrl}/chat/completions'),
+          );
+          
+          request.headers['Authorization'] = 'Bearer ${config.apiKey}';
+          request.headers['Content-Type'] = 'application/json';
+          request.body = jsonEncode({
+            'model': config.id,
+            'messages': messages,
+            'stream': true,
+            'temperature': temperature,
+          });
+          
+          final response = await client.send(request);
+          
+          if (response.statusCode == 200) {
+            subscription = response.stream
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())
+              .listen(
+                (line) {
+                  if (line.trim().isNotEmpty) {
+                    try {
+                      // Handle SSE format with 'data: ' prefix
+                      if (line.startsWith('data: ')) {
+                        line = line.substring(6).trim();
+                      }
+                      
+                      // Skip empty lines and [DONE] marker
+                      if (line.isEmpty || line == '[DONE]') {
+                        if (line == '[DONE]') {
+                          cleanupAndComplete();
+                        }
+                        return;
+                      }
+                      
+                      // Try to parse the JSON data
+                      Map<String, dynamic> data;
+                      try {
+                        data = jsonDecode(line);
+                      } catch (jsonError) {
+                        debugPrint('Warning: Invalid JSON in streaming response: $jsonError\nLine: $line');
+                        return; // Skip this line and continue
+                      }
+                      
+                      String? content;
+                      
+                      // Handle OpenAI format
+                      if (data['choices'] != null && data['choices'].isNotEmpty) {
+                        if (data['choices'][0]['delta'] != null && data['choices'][0]['delta']['content'] != null) {
+                          content = data['choices'][0]['delta']['content'];
+                        } else if (data['choices'][0]['message'] != null && data['choices'][0]['message']['content'] != null) {
+                          content = data['choices'][0]['message']['content'];
+                        }
+                      }
+                      
+                      if (content != null && content.isNotEmpty) {
+                        buffer.write(content);
+                        onToken(content);
+                      }
+                    } catch (e) {
+                      debugPrint('Warning: Error parsing streaming response line: $e');
+                      // Continue processing other lines
+                    }
+                  }
+                },
+                onDone: () => cleanupAndComplete(),
+                onError: (e) => cleanupAndComplete('Error streaming response: $e'),
+                cancelOnError: false
+              );
+          } else {
+            cleanupAndComplete('Failed to get response: ${response.statusCode}');
+          }
+          
+          return await completer.future;
+        } catch (e) {
+          cleanupAndComplete('Error in OpenAI streaming response: $e');
+          rethrow;
+        }
       } else {
-        debugPrint('OpenAI API error: ${response.statusCode} ${response.body}');
-        return 'Failed to get response: ${response.statusCode} - ${response.body}';
+        // Handle non-streaming response
+        final response = await http.post(
+          Uri.parse('${config.baseUrl}/chat/completions'),
+          headers: {
+            'Authorization': 'Bearer ${config.apiKey}',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': config.id,
+            'messages': messages,
+            'stream': false,
+            'temperature': temperature,
+          }),
+        );
+        
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          return data['choices'][0]['message']['content'];
+        } else {
+          debugPrint('OpenAI API error: ${response.statusCode} ${response.body}');
+          return 'Failed to get response: ${response.statusCode} - ${response.body}';
+        }
       }
     } catch (e) {
       debugPrint('Error getting OpenAI response: $e');
@@ -384,27 +472,50 @@ class ChatService {
               (line) {
                 if (line.trim().isNotEmpty) {
                   try {
-                    // Handle "data: " prefix in SSE
-                    String jsonStr = line;
+                    // Handle SSE format with 'data: ' prefix
                     if (line.startsWith('data: ')) {
-                      jsonStr = line.substring(6);
+                      line = line.substring(6).trim();
                     }
                     
-                    // Skip "[DONE]" message
-                    if (jsonStr.trim() == '[DONE]') {
+                    // Skip empty lines and [DONE] marker
+                    if (line.isEmpty || line == '[DONE]') {
+                      if (line == '[DONE]') {
+                        cleanupAndComplete();
+                      }
                       return;
                     }
                     
-                    final data = jsonDecode(jsonStr);
+                    // Try to parse the JSON data
+                    Map<String, dynamic> data;
+                    try {
+                      data = jsonDecode(line);
+                    } catch (jsonError) {
+                      debugPrint('Warning: Invalid JSON in streaming response: $jsonError\nLine: $line');
+                      return; // Skip this line and continue
+                    }
+                    
                     String? content;
                     
-                    // Handle different response formats
-                    if (data['message']?['content'] != null) {
+                    // Handle different response formats based on API patterns
+                    // OpenAI/compatible format
+                    if (data['choices'] != null && data['choices'].isNotEmpty) {
+                      if (data['choices'][0]['delta'] != null && data['choices'][0]['delta']['content'] != null) {
+                        content = data['choices'][0]['delta']['content'];
+                      } else if (data['choices'][0]['message'] != null && data['choices'][0]['message']['content'] != null) {
+                        content = data['choices'][0]['message']['content'];
+                      }
+                    }
+                    // Ollama specific format
+                    else if (data['message'] != null && data['message']['content'] != null) {
                       content = data['message']['content'];
-                    } else if (data['choices']?[0]?['delta']?['content'] != null) {
-                      content = data['choices'][0]['delta']['content'];
-                    } else if (data['choices']?[0]?['message']?['content'] != null) {
-                      content = data['choices'][0]['message']['content'];
+                    } 
+                    // Simple response format
+                    else if (data['response'] != null) {
+                      content = data['response'];
+                    }
+                    // Text field format
+                    else if (data['text'] != null) {
+                      content = data['text'];
                     }
                     
                     if (content != null && content.isNotEmpty) {
@@ -468,25 +579,126 @@ class ChatService {
         'content': userMessage,
       });
       
-      final response = await http.post(
-        Uri.parse('${config.baseUrl}/chat/completions'),
-        headers: {
-          'Authorization': 'Bearer ${config.apiKey}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'model': config.id,
-          'messages': messages,
-          'temperature': temperature,
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'];
+      // Handle streaming response if requested
+      if (stream && onToken != null) {
+        final client = http.Client();
+        final completer = Completer<String>();
+        final buffer = StringBuffer();
+        StreamSubscription? subscription;
+        
+        void cleanupAndComplete([String? error]) {
+          subscription?.cancel();
+          client.close();
+          if (error != null && !completer.isCompleted) {
+            completer.completeError(error);
+          } else if (!completer.isCompleted) {
+            completer.complete(buffer.toString());
+          }
+        }
+        
+        try {
+          final request = http.Request(
+            'POST',
+            Uri.parse('${config.baseUrl}/chat/completions'),
+          );
+          
+          request.headers['Authorization'] = 'Bearer ${config.apiKey}';
+          request.headers['Content-Type'] = 'application/json';
+          request.body = jsonEncode({
+            'model': config.id,
+            'messages': messages,
+            'stream': true,
+            'temperature': temperature,
+          });
+          
+          final response = await client.send(request);
+          
+          if (response.statusCode == 200) {
+            subscription = response.stream
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())
+              .listen(
+                (line) {
+                  if (line.trim().isNotEmpty) {
+                    try {
+                      // Handle SSE format with 'data: ' prefix
+                      if (line.startsWith('data: ')) {
+                        line = line.substring(6).trim();
+                      }
+                      
+                      // Skip empty lines and [DONE] marker
+                      if (line.isEmpty || line == '[DONE]') {
+                        if (line == '[DONE]') {
+                          cleanupAndComplete();
+                        }
+                        return;
+                      }
+                      
+                      // Try to parse the JSON data
+                      Map<String, dynamic> data;
+                      try {
+                        data = jsonDecode(line);
+                      } catch (jsonError) {
+                        debugPrint('Warning: Invalid JSON in streaming response: $jsonError\nLine: $line');
+                        return; // Skip this line and continue
+                      }
+                      
+                      String? content;
+                      
+                      // Handle Mistral format (similar to OpenAI)
+                      if (data['choices'] != null && data['choices'].isNotEmpty) {
+                        if (data['choices'][0]['delta'] != null && data['choices'][0]['delta']['content'] != null) {
+                          content = data['choices'][0]['delta']['content'];
+                        } else if (data['choices'][0]['message'] != null && data['choices'][0]['message']['content'] != null) {
+                          content = data['choices'][0]['message']['content'];
+                        }
+                      }
+                      
+                      if (content != null && content.isNotEmpty) {
+                        buffer.write(content);
+                        onToken(content);
+                      }
+                    } catch (e) {
+                      debugPrint('Warning: Error parsing streaming response line: $e');
+                      // Continue processing other lines
+                    }
+                  }
+                },
+                onDone: () => cleanupAndComplete(),
+                onError: (e) => cleanupAndComplete('Error streaming response: $e'),
+                cancelOnError: false
+              );
+          } else {
+            cleanupAndComplete('Failed to get response: ${response.statusCode}');
+          }
+          
+          return await completer.future;
+        } catch (e) {
+          cleanupAndComplete('Error in Mistral streaming response: $e');
+          rethrow;
+        }
       } else {
-        debugPrint('Mistral API error: ${response.statusCode} ${response.body}');
-        return 'Failed to get response: ${response.statusCode} - ${response.body}';
+        // Handle non-streaming response
+        final response = await http.post(
+          Uri.parse('${config.baseUrl}/chat/completions'),
+          headers: {
+            'Authorization': 'Bearer ${config.apiKey}',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': config.id,
+            'messages': messages,
+            'temperature': temperature,
+          }),
+        );
+        
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          return data['choices'][0]['message']['content'];
+        } else {
+          debugPrint('Mistral API error: ${response.statusCode} ${response.body}');
+          return 'Failed to get response: ${response.statusCode} - ${response.body}';
+        }
       }
     } catch (e) {
       debugPrint('Error getting Mistral response: $e');
@@ -524,29 +736,130 @@ class ChatService {
         'content': userMessage,
       });
       
-      final response = await http.post(
-        Uri.parse('${config.baseUrl}/chat/completions'),
-        headers: {
-          'Authorization': 'Bearer ${config.apiKey}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'model': config.id,
-          'messages': messages,
-          'temperature': temperature,
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'];
+      // Handle streaming response if requested
+      if (stream && onToken != null) {
+        final client = http.Client();
+        final completer = Completer<String>();
+        final buffer = StringBuffer();
+        StreamSubscription? subscription;
+        
+        void cleanupAndComplete([String? error]) {
+          subscription?.cancel();
+          client.close();
+          if (error != null && !completer.isCompleted) {
+            completer.completeError(error);
+          } else if (!completer.isCompleted) {
+            completer.complete(buffer.toString());
+          }
+        }
+        
+        try {
+          final request = http.Request(
+            'POST',
+            Uri.parse('${config.baseUrl}/chat/completions'),
+          );
+          
+          request.headers['Authorization'] = 'Bearer ${config.apiKey}';
+          request.headers['Content-Type'] = 'application/json';
+          request.body = jsonEncode({
+            'model': config.id,
+            'messages': messages,
+            'stream': true,
+            'temperature': temperature,
+          });
+          
+          final response = await client.send(request);
+          
+          if (response.statusCode == 200) {
+            subscription = response.stream
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())
+              .listen(
+                (line) {
+                  if (line.trim().isNotEmpty) {
+                    try {
+                      // Handle SSE format with 'data: ' prefix
+                      if (line.startsWith('data: ')) {
+                        line = line.substring(6).trim();
+                      }
+                      
+                      // Skip empty lines and [DONE] marker
+                      if (line.isEmpty || line == '[DONE]') {
+                        if (line == '[DONE]') {
+                          cleanupAndComplete();
+                        }
+                        return;
+                      }
+                      
+                      // Try to parse the JSON data
+                      Map<String, dynamic> data;
+                      try {
+                        data = jsonDecode(line);
+                      } catch (jsonError) {
+                        debugPrint('Warning: Invalid JSON in streaming response: $jsonError\nLine: $line');
+                        return; // Skip this line and continue
+                      }
+                      
+                      String? content;
+                      
+                      // Handle DeepSeek format (similar to OpenAI)
+                      if (data['choices'] != null && data['choices'].isNotEmpty) {
+                        if (data['choices'][0]['delta'] != null && data['choices'][0]['delta']['content'] != null) {
+                          content = data['choices'][0]['delta']['content'];
+                        } else if (data['choices'][0]['message'] != null && data['choices'][0]['message']['content'] != null) {
+                          content = data['choices'][0]['message']['content'];
+                        }
+                      }
+                      
+                      if (content != null && content.isNotEmpty) {
+                        buffer.write(content);
+                        onToken(content);
+                      }
+                    } catch (e) {
+                      debugPrint('Warning: Error parsing streaming response line: $e');
+                      // Continue processing other lines
+                    }
+                  }
+                },
+                onDone: () => cleanupAndComplete(),
+                onError: (e) => cleanupAndComplete('Error streaming response: $e'),
+                cancelOnError: false
+              );
+          } else {
+            cleanupAndComplete('Failed to get response: ${response.statusCode}');
+          }
+          
+          return await completer.future;
+        } catch (e) {
+          cleanupAndComplete('Error in DeepSeek streaming response: $e');
+          rethrow;
+        }
       } else {
-        debugPrint('DeepSeek API error: ${response.statusCode} ${response.body}');
-        return 'Failed to get response: ${response.statusCode} - ${response.body}';
+        // Handle non-streaming response
+        final response = await http.post(
+          Uri.parse('${config.baseUrl}/chat/completions'),
+          headers: {
+            'Authorization': 'Bearer ${config.apiKey}',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': config.id,
+            'messages': messages,
+            'temperature': temperature,
+          }),
+        );
+        
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          return data['choices'][0]['message']['content'];
+        } else {
+          debugPrint('DeepSeek API error: ${response.statusCode} ${response.body}');
+          return 'Failed to get response: ${response.statusCode} - ${response.body}';
+        }
       }
     } catch (e) {
       debugPrint('Error getting DeepSeek response: $e');
       return 'Error connecting to DeepSeek: $e';
     }
   }
-} 
+}

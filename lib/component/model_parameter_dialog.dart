@@ -16,102 +16,202 @@ class ModelParameterDialog extends StatefulWidget {
 }
 
 class _ModelParameterDialogState extends State<ModelParameterDialog> {
-  String? _selectedParameter;
+  late String _selectedSize;
 
   @override
   void initState() {
     super.initState();
-    if (widget.model.parameters.isNotEmpty) {
-      _selectedParameter = widget.model.parameters.first;
-    }
+    _selectedSize = widget.model.getDefaultSize();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Install ${widget.model.name}'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Select parameter size:',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          if (widget.model.parameters.isEmpty)
-            const Text('No parameters available for this model')
-          else
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedParameter,
-                  isExpanded: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  borderRadius: BorderRadius.circular(8),
-                  items: widget.model.parameters
-                      .where((param) => param.contains('b') || param.contains('m'))
-                      .map((param) {
-                    return DropdownMenuItem<String>(
-                      value: param,
-                      child: Text(param),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedParameter = value;
-                    });
-                  },
-                ),
-              ),
-            ),
-          const SizedBox(height: 16),
-          Text(
-            'Command to run:',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Text(
-              'ollama pull ${widget.model.name}${_selectedParameter != null ? ":$_selectedParameter" : ""}',
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
+    final sizes = widget.model.getParameterSizes();
+    final features = widget.model.getParameterFeatures();
+    final theme = Theme.of(context);
+    final width = MediaQuery.of(context).size.width;
+    
+    // Fix: Calculate maxWidth properly to avoid constraint issues
+final maxWidth = width * 0.4 > 300 ? width * 0.4 : 300.0;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: maxWidth,
+          minWidth: 300, // Minimum width to prevent overflow
         ),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context);
-            widget.onInstall(
-              widget.model.name,
-              _selectedParameter != null ? "${widget.model.name}:$_selectedParameter" : widget.model.name,
-            );
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF8B5CF6),
-            foregroundColor: Colors.white,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      widget.model.getCategoryIcon(),
+                      color: widget.model.getCategoryColor(),
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Configure ${widget.model.name}',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.model.category,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      style: IconButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ),
+                if (widget.model.description.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.model.description,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.8),
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (sizes.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Model Size',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withOpacity(0.2),
+                      ),
+                    ),
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedSize,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        filled: true,
+                        fillColor: theme.colorScheme.surface,
+                      ),
+                      items: sizes.map((size) => DropdownMenuItem(
+                        value: size,
+                        child: Text(
+                          size.toUpperCase(),
+                          style: theme.textTheme.bodyLarge,
+                        ),
+                      )).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedSize = value);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+                if (features.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Features',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: features.map((feature) => Chip(
+                      label: Text(
+                        feature,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      backgroundColor: theme.colorScheme.surfaceVariant,
+                      side: BorderSide.none,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    )).toList(),
+                  ),
+                ],
+                const SizedBox(height: 32),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        final modelName = widget.model.name;
+                        final fullModelName = widget.model.getFullModelName(_selectedSize);
+                        widget.onInstall(modelName, fullModelName);
+                        Navigator.pop(context);
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: widget.model.getCategoryColor(),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        'Install Model',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          child: const Text('Install'),
         ),
-      ],
+      ),
     );
   }
 }
