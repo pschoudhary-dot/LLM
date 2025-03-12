@@ -68,7 +68,7 @@ class AuthService {
           'email': email,
           'updated_at': DateTime.now().toIso8601String(),
           'survey_completed': false,
-        }).execute();
+        });
       } catch (e) {
         print('Error creating profile: $e');
         // Continue even if profile creation fails, we'll handle it later
@@ -199,8 +199,7 @@ class AuthService {
       await _supabase
           .from('profiles')
           .update(updateData)
-          .eq('id', userId)
-          .execute();
+          .eq('id', userId);
     } catch (e) {
       print('Error updating profile: $e');
       rethrow;

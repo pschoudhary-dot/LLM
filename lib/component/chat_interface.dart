@@ -547,7 +547,7 @@ class _ChatInterfaceState extends State<ChatInterface> {
                 Padding(
                   padding: const EdgeInsets.only(right: 8.0, top: 4.0),
                   child: CircleAvatar(
-                    backgroundColor: const Color(0xFF8B5CF6),
+                    backgroundColor: const Color.fromARGB(255, 255, 255, 255),
                     radius: 16,
                     child: ClipOval(
                       child: Image.asset(
